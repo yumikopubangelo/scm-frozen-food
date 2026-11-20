@@ -93,8 +93,8 @@ from (values
   -- Nugget ayam 500 g (digoreng setengah matang)
   ('PJ-03','BB-01',0.300), ('PJ-03','BB-06',0.050), ('PJ-03','BB-07',0.060), ('PJ-03','BB-09',0.040),
   ('PJ-03','BB-10',0.010), ('PJ-03','BB-13',0.010), ('PJ-03','BB-08',0.050), ('PJ-03','BB-16',1),
-  -- Bakso sapi isi 25 (~500 g)
-  ('PJ-04','BB-04',0.350), ('PJ-04','BB-05',0.100), ('PJ-04','BB-10',0.010), ('PJ-04','BB-11',0.010),
+  -- Bakso sapi isi 25 (~500 g, ±50% daging: versi awal 0,35 kg sapi membuat biaya bahan > harga jual)
+  ('PJ-04','BB-04',0.250), ('PJ-04','BB-05',0.150), ('PJ-04','BB-10',0.010), ('PJ-04','BB-11',0.010),
   ('PJ-04','BB-13',0.010), ('PJ-04','BB-16',1),
   -- Cireng isi ayam pedas isi 10 (~400 g)
   ('PJ-05','BB-05',0.250), ('PJ-05','BB-01',0.060), ('PJ-05','BB-10',0.005), ('PJ-05','BB-12',0.010),

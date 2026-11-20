@@ -1,0 +1,5 @@
+# Simpan semua berkas teks dengan akhir baris LF (Unix) di repo, apa pun OS-nya.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

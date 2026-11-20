@@ -169,3 +169,58 @@ Tidak ada. Langkah berikutnya (M1) butuh pemilik membuat project Supabase.
 ### Campur tangan pemilik
 - Mematikan "Allow new users to sign up" dan membuat akun admin (Auto Confirm) di dashboard Supabase.
 - Login di panel browser agent (agent tidak boleh mengetik password asli).
+
+---
+
+## M3 — Master data (supplier, bahan baku, produk, reseller) & BOM (21 Nov 2026)
+
+### Yang dikerjakan
+- **CRUD empat entitas** dengan pola yang sama: daftar + pencarian, form tambah dengan **kode otomatis** (SUP-09, BB-17, PJ-09, RSL-13), form ubah, dan hapus dengan konfirmasi.
+  - **Supplier:** jumlah bahan yang dipasok, daftar bahan dan status stoknya.
+  - **Reseller:** filter tipe toko/reseller, saran kota dari data yang ada, ringkasan jumlah dan nilai pesanan.
+  - **Bahan baku:** badge Aman/Kritis/Habis, filter "hanya di bawah reorder point", nilai persediaan, supplier utama, daftar produk yang memakai bahan ini.
+  - **Produk & BOM:** **editor resep** (tambah bahan, ubah jumlah per pak, hapus), **biaya bahan per pak**, **margin kotor**, dan **kapasitas produksi** dari stok sekarang beserta bahan pembatasnya.
+- **Stok opname** di halaman bahan dan produk, lewat fungsi `sesuaikan_stok`. Selisihnya dicatat di mutasi.
+- Komponen bersama: `Field`/`Pilihan`/`TombolSimpan` (form), `Tabel`, `Badge`, `Pencarian`, `BannerOk`, `TombolHapus`, `StokOpname`.
+- Pustaka: `validasi.ts` (zod), `galat-db.ts` (kode error Postgres → kalimat Indonesia), `format.ts` (Rupiah, angka, tanggal), `cari.ts`, `hitung-produk.ts`.
+- **Unit test pertama (Vitest): 15 tes** untuk validasi, pencarian, dan kode otomatis.
+- Migrasi **`0004_lindungi_riwayat_stok.sql`**.
+- `docs/master-data.md`.
+
+### Keputusan teknis
+1. **Satu pola, empat entitas** (`page` / `baru` / `[id]` / `form-xxx` / `actions`). Agak berulang, tapi tiap berkas pendek dan mudah dibaca. Agent sengaja tidak membuat "CRUD generik" berbasis konfigurasi, karena lebih sulit dipahami pemilik proyek.
+2. **Validasi di server dengan zod.** Validasi di browser bisa dilewati, sedangkan database tetap menjadi pengaman terakhir (`unique`, `check`, FK).
+3. **Koma desimal gaya Indonesia** diterima di semua input angka (`0,25`) dan ditampilkan kembali dengan koma.
+4. **Isian tidak hilang saat error.** React 19 mengosongkan form setelah action, jadi action mengembalikan isian terakhir dan `key={versi}` membuat input dibuat ulang dengan nilai itu.
+5. **Data bertransaksi tidak bisa dihapus.** Supplier dengan PO, bahan dengan riwayat, dan sejenisnya ditolak database dengan pesan yang jelas. Laporan masa lalu harus tetap utuh.
+6. **Kolom stok tidak ada di form.** Stok hanya berubah lewat transaksi atau stok opname yang tercatat.
+7. **Biaya bahan & kapasitas produksi** dihitung dari BOM. Ini informasi SCM yang langsung berguna dan menjadi dasar agen restock (bahan pembatas = bahan yang harus dibeli).
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| **Data seed tidak realistis:** Bakso Sapi biaya bahan Rp 48.700 > harga jual Rp 45.000 (margin −8%) | Resep seed memakai 0,35 kg sapi × Rp 130.000. Baru terlihat setelah kolom "Biaya bahan" dibuat | Resep dikoreksi lewat **editor BOM di aplikasi** menjadi 0,25 kg sapi + 0,15 kg tapioka (±50% daging), sehingga margin 19%. `seed.sql` disamakan |
+| **Desain M1:** menghapus bahan ikut menghapus riwayat stoknya | `mutasi_stok` memakai `ON DELETE CASCADE` | Migrasi `0004` mengganti menjadi `RESTRICT` |
+| Isian angka kosong tampil "harus berupa angka", bukan "wajib diisi" | `z.coerce.number()` memberi fungsi error nilai yang sudah dikonversi (`NaN`) | Konversi sendiri di `preprocess`, lalu `z.number()`; ditambah unit test |
+| Tabel tampil tanpa gaya (header tengah, tanpa padding) di dev server | Cache persisten Turbopack (`.next/dev`, 179 MB) menyimpan `globals.css` versi lama. Agent memastikan lewat: CSS produksi berisi `.tabel`, CSS dev tidak; restart biasa tidak cukup | Hentikan dev server, hapus `.next/dev`, jalankan ulang |
+| `PageProps<"/supplier/[id]">` error TypeScript | Tipe rute dibuat Next dari folder yang ada; rute baru belum terdaftar | `npx next typegen` |
+| `npm audit`: 2 critical + 1 moderate | Agent memasang Vitest 3 (versi lama) | Upgrade ke Vitest 5. Ini butuh `@types/node` ≥ 22 (dari template: 20), yang memang cocok dengan Node 22 di komputer dan Vercel. Hasilnya **0 kerentanan** |
+| Angka tersimpan tampil "0.25" padahal admin mengetik "0,25" | `String(number)` memakai titik | `Field` dan editor BOM menampilkan koma |
+| Pesan stok opname "37.5" dan "selisihnya tercatat" walau tidak ada selisih | Angka tidak diformat; kalimat terlalu yakin | Diformat `angka()`, kalimat diubah menjadi "kalau ada selisih…" |
+| Klik hapus lewat skrip tidak bereaksi | Skrip berjalan sebelum React selesai memasang handler (halaman baru dimuat) | Diulang dengan klik sungguhan setelah halaman siap. Data dicek langsung di DB: SUP-01 dan 85 PO-nya utuh |
+| Agent salah menulis skrip `perl` sehingga link tabel menjadi `/PLACEHOLDER` | Kesalahan agent sendiri saat menambah lebar kolom | Diperbaiki dengan edit tepat. Dicek `grep`: tidak ada sisa |
+| Nama bahan terpotong 3 baris, kode `SUP-01` terbelah | Kolom terlalu sempit di lebar panel | `min-w-44` untuk kolom nama, `whitespace-nowrap` untuk kode/telepon/angka |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 15/15. Tes skenario DB 19/19** (diulang setelah migrasi 0004).
+- **Uji di browser (panel agent, sudah login)**:
+  - Supplier: form kosong/salah menampilkan "Nama supplier wajib diisi" dan "Lead time harus berupa angka", isian tetap ada, kode otomatis `SUP-09`. Simpan menampilkan banner "Data berhasil ditambahkan." Ubah kode menjadi `SUP-01` menampilkan "Kode itu sudah dipakai". Hapus supplier tes berhasil. **Hapus SUP-01 ditolak**: "masih dipakai di purchase order" (dicek di DB: 85 PO utuh).
+  - Bahan baku: filter kritis menampilkan **9 bahan** (sama dengan dashboard), Telur "Habis", format angka Indonesia (`0,6`, `1.300`). Stok opname dengan angka negatif ditolak; dengan angka sama "37,5" (koma) berhasil tanpa mutasi baru.
+  - Produk: daftar dengan biaya bahan, margin, dan kapasitas. Produk tes dibuat, langsung diarahkan ke halaman resep ("Resep masih kosong"). Tambah bahan tanpa memilih menampilkan "Pilih bahan". Tambah daging ayam 0,2 kg menghasilkan biaya Rp 10.400 dan kapasitas 187 pak (⌊37,5/0,2⌋) ✔. Hapus baris resep lalu hapus produk berhasil.
+  - Reseller: filter tipe toko menampilkan 7 toko. Detail RSL-01: 207 pesanan, total Rp 161.864.000, saran 6 kota.
+  - Mobile 375 px: halaman tidak melebar (lebar dokumen = 375); hanya tabel yang bisa digeser di dalam kartunya.
+- Data tes (SUP-09, Produk Tes) sudah dihapus lagi. Satu-satunya perubahan data yang disengaja adalah koreksi resep Bakso Sapi.
+- Screenshot: `m3-validasi-form.jpg`, `m3-hapus-ditolak.png`, `m3-bahan-baku.png`, `m3-produk-daftar.png`, `m3-produk-bom.png`.
+
+### Campur tangan pemilik
+Tidak ada.

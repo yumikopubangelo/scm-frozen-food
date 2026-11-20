@@ -38,14 +38,32 @@ src/
     login/             # halaman login + Server Action login/logout (di luar group, tanpa sidebar)
     (app)/             # route group: SEMUA halaman yang wajib login; layout.tsx = cek login + sidebar
       page.tsx         # dashboard
-      supplier/ ...    # 1 folder = 1 halaman menu
+      supplier/        # pola CRUD (sama untuk reseller, bahan-baku, produk):
+        page.tsx       #   daftar + cari ?q= + banner ?ok=
+        baru/page.tsx  #   form tambah (kode otomatis)
+        [id]/page.tsx  #   form ubah + hapus + info terkait
+        form-supplier.tsx  # client form (useActionState), dipakai baru & ubah
+        actions.ts     #   Server Action simpan (id null = tambah) & hapus
+      produk/editor-bom.tsx  # editor resep (BOM) per produk
   components/
     navigasi.ts        # daftar menu sidebar (satu-satunya sumber)
     app-shell.tsx      # sidebar desktop + laci menu mobile
     judul-halaman.tsx  # JudulHalaman, SegeraHadir
+    form.tsx           # Field, Pilihan, TombolSimpan, PesanForm (pakai StatusForm)
+    ui.tsx             # Tabel, Badge, BadgeStok, Pencarian, BannerOk, TombolTambah, Kembali
+    tombol-hapus.tsx   # hapus + konfirmasi + tampilkan pesan error FK
+    stok-opname.tsx    # form stok opname (rpc sesuaikan_stok)
   lib/
     auth.ts            # wajibLogin(): verifikasi sesi di server (getClaims)
     supabase/          # server.ts (klien per request), proxy.ts (updateSession)
+    validasi.ts        # skema zod: teksWajib, angkaWajib (koma desimal), bacaForm -> StatusForm
+    galat-db.ts        # kode error Postgres -> kalimat Indonesia
+    format.ts          # rupiah(), angka(), tanggal(), kodeBerikutnya()
+    cari.ts            # filterCari() aman untuk PostgREST .or()
+    hitung-produk.ts   # biaya bahan per pak, kapasitas produksi dari BOM
+    aksi-stok.ts       # Server Action stok opname
+    tipe.ts            # tipe baris tabel
+    *.test.ts          # unit test Vitest (npm test)
 supabase/
   migrations/          # SQL skema + fungsi stok, diberi nomor urut (0001_..., 0002_...)
   seed.sql             # data contoh (frozen food Tasikmalaya)
@@ -63,7 +81,8 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 - **Mutasi data** lewat Server Actions (`"use server"`) lalu `revalidatePath`. Pembacaan data di Server Component.
 - **Halaman baru:** taruh di `src/app/(app)/<nama>/page.tsx` (otomatis wajib login), tambahkan ke `components/navigasi.ts`, pakai `JudulHalaman` + kelas `.card` `.input` `.btn-primary` dari `globals.css`. Screenshot untuk laporan JANGAN menampilkan email admin (footer sidebar) — crop.
 - **Keamanan:** RLS menyala di semua tabel; hanya pengguna `authenticated` yang boleh baca/tulis. Jangan pernah commit secret — pakai `.env.local` (lokal) dan Environment Variables Vercel (produksi). `DATABASE_URL` hanya untuk skrip lokal.
-- **Format angka/tanggal:** `Intl` dengan locale `id-ID` (Rp, tanggal Indonesia).
+- **Format angka/tanggal:** `Intl` dengan locale `id-ID` (Rp, tanggal Indonesia). Input angka menerima koma desimal; `Field` menampilkan angka dengan koma.
+- **Form:** validasi di server dengan zod (`lib/validasi.ts`), kembalikan `StatusForm` (galat per kolom + isian terakhir). Error Supabase selalu lewat `pesanGalat()`. Data yang punya riwayat transaksi tidak bisa dihapus (FK RESTRICT) — itu disengaja.
 - **Setiap milestone:** tes (build + lint + skenario), perbarui `PROSES.md`, lalu commit `M<n>: <ringkasan>`.
 
 ## Menjalankan lokal
@@ -73,6 +92,10 @@ npm install
 cp .env.example .env.local   # isi URL & key Supabase
 npm run dev                  # http://localhost:3000
 npm run build && npm run lint
+npm test                     # unit test Vitest (src/**/*.test.ts)
+npx next typegen             # kalau PageProps<"/rute/baru"> error: buat ulang tipe rute
+
+# CSS/halaman di dev server tidak ikut berubah? Hentikan dev server, hapus .next/dev, jalankan ulang.
 
 # database (butuh DATABASE_URL = Session pooler di .env.local)
 npm run db:migrate           # pasang migrasi yang belum terpasang
@@ -90,7 +113,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M0 | Setup proyek | selesai |
 | M1 | Skema DB + fungsi stok + seed | selesai |
 | M2 | Login + layout | selesai |
-| M3 | Master data + BOM | belum |
+| M3 | Master data + BOM | selesai |
 | M4 | Purchase Order | belum |
 | M5 | Produksi | belum |
 | M6 | Pesanan & pengiriman | belum |
