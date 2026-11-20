@@ -49,7 +49,8 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 
 - **Bahasa:** nama domain (tabel, kolom, variabel bisnis) dalam **bahasa Indonesia** (`bahan_baku`, `pesanan`, `stok`); istilah framework tetap Inggris (`page.tsx`, `layout`, `action`). Semua teks UI bahasa Indonesia.
 - **Database:** `snake_case`; tabel bentuk tunggal (`supplier`, `produk`); PK `id bigint identity`; setiap tabel punya `created_at`.
-- **Stok HANYA berubah lewat fungsi Postgres** (`terima_po`, `catat_produksi`, `kirim_pesanan`, …) yang berjalan dalam satu transaksi dan menulis `mutasi_stok`. Jangan `update ... set stok = ...` dari kode aplikasi.
+- **Stok HANYA berubah lewat fungsi Postgres** (`terima_po`, `catat_produksi`, `kirim_pesanan`, …) yang berjalan dalam satu transaksi dan menulis `mutasi_stok`. Ini dipaksa di level database: role `authenticated` tidak punya hak UPDATE kolom `stok`/`status`. Panggil dari aplikasi dengan `supabase.rpc("terima_po", { p_po_id })`. Detail: `docs/alur-stok.md`.
+- **Mengubah skema:** buat migrasi baru `supabase/migrations/000N_....sql` (jangan edit migrasi yang sudah terpasang), lalu `npm run db:migrate`. Kalau menambah tabel/fungsi, ingat beri GRANT + RLS seperti di `0003_hak_akses.sql` (hak bawaan sengaja dicabut).
 - **Mutasi data** lewat Server Actions (`"use server"`) lalu `revalidatePath`. Pembacaan data di Server Component.
 - **Keamanan:** RLS menyala di semua tabel; hanya pengguna `authenticated` yang boleh baca/tulis. Jangan pernah commit secret — pakai `.env.local` (lokal) dan Environment Variables Vercel (produksi). `DATABASE_URL` hanya untuk skrip lokal.
 - **Format angka/tanggal:** `Intl` dengan locale `id-ID` (Rp, tanggal Indonesia).
@@ -62,6 +63,12 @@ npm install
 cp .env.example .env.local   # isi URL & key Supabase
 npm run dev                  # http://localhost:3000
 npm run build && npm run lint
+
+# database (butuh DATABASE_URL = Session pooler di .env.local)
+npm run db:migrate           # pasang migrasi yang belum terpasang
+npm run db:seed              # data contoh + simulasi 12 bulan (~1,5 menit)
+npm run db:test              # 19 tes skenario stok (di-rollback)
+npm run db:reset -- --ya     # HAPUS semua objek aplikasi (dev saja)
 ```
 
 Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → Add user.
@@ -71,7 +78,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | # | Milestone | Status |
 |---|---|---|
 | M0 | Setup proyek | selesai |
-| M1 | Skema DB + fungsi stok + seed | belum |
+| M1 | Skema DB + fungsi stok + seed | selesai |
 | M2 | Login + layout | belum |
 | M3 | Master data + BOM | belum |
 | M4 | Purchase Order | belum |
