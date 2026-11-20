@@ -18,3 +18,31 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* Dasar tombol. Di Tailwind v4 kelas buatan sendiri harus didaftarkan lewat @utility
+   supaya bisa di-@apply oleh kelas lain (di v3 cukup @layer components). */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+    transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+}
+
+/* Komponen dasar yang dipakai berulang. Pakai kelas ini supaya tampilan seragam. */
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+  .input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900
+      placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20
+      disabled:bg-slate-100;
+  }
+  .btn-primary {
+    @apply btn bg-sky-600 text-white hover:bg-sky-700;
+  }
+  .btn-secondary {
+    @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+}

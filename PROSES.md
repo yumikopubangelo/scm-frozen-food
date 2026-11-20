@@ -124,3 +124,48 @@ Tidak ada. Langkah berikutnya (M1) butuh pemilik membuat project Supabase.
 ### Campur tangan pemilik
 - Membuat project Supabase dan mengisi `.env.local`.
 - **Tidak perlu** mengulang pengisian `DATABASE_URL`: agent memperbaikinya sendiri (region Tokyo, kurung siku dihapus). URL dan publishable key aplikasi tidak diubah.
+
+---
+
+## M2 — Login, proteksi halaman, dan kerangka tampilan (20–21 Nov 2026)
+
+### Yang dikerjakan
+- **Login admin** dengan Supabase Auth (email + password): halaman `/login`, Server Action `login`/`logout`, dan pesan error berbahasa Indonesia.
+- **Proteksi tiga lapis**: `src/proxy.ts` (pengganti middleware di Next 16) memperbarui sesi dan mengalihkan pengguna yang belum login, `wajibLogin()` di layout server memverifikasi ulang, dan database (GRANT + RLS dari M1) menolak role anon.
+- **Kerangka tampilan**: route group `src/app/(app)/` dengan sidebar tetap di desktop (≥ 1024 px) dan laci menu ☰ di HP. Ditambah 10 menu, halaman sementara "dibangun di milestone Mx" untuk menu yang belum jadi, halaman error, dan kerangka loading.
+- **Dashboard sementara**: 4 angka (bahan kritis, produk kritis, PO berjalan, pesanan berjalan) langsung dari Supabase. Tujuannya membuktikan jalur data untuk admin yang login.
+- Kelas tampilan bersama di `globals.css` (`.card`, `.input`, `.btn-*`) dan ikon `lucide-react`.
+- `docs/login-dan-layout.md`: penjelasan untuk pemilik proyek.
+
+### Keputusan teknis
+1. **`getClaims()`, bukan `getSession()`**, untuk memeriksa login di server. `getSession()` hanya membaca cookie yang bisa dipalsukan, sedangkan `getClaims()` memverifikasi tanda tangan JWT. Peringatan ini tertulis di dokumentasi library Supabase sendiri.
+2. **Proxy bukan satu-satunya pengaman.** Dokumentasi Next.js 16 menyebut proxy hanya untuk pengecekan "optimistis", jadi layout server memeriksa ulang.
+3. **Login lewat Server Action + `useActionState`**, pola resmi Next untuk form dengan pesan error. Hasilnya tidak perlu API route terpisah dan tidak perlu klien Supabase di browser.
+4. **Pesan error login sengaja umum** ("Email atau password salah") supaya orang tidak bisa menebak email yang terdaftar. Parameter `?next=` hanya menerima path internal untuk mencegah *open redirect*.
+5. **Pendaftaran publik wajib dimatikan.** Kebijakan RLS "authenticated boleh semua" hanya aman kalau tidak ada orang asing yang bisa membuat akun. Agent memverifikasinya lewat endpoint `/auth/v1/settings` (`disable_signup: true`) tanpa membuat akun percobaan.
+6. **Screenshot laporan di-crop** supaya email admin di footer sidebar tidak ikut masuk ke repo yang nanti publik.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| `next build` gagal: `Cannot find module '../../../src/app/page.js'` | Tipe hasil generate dev server (`.next/dev/types`) masih menunjuk lokasi lama setelah `page.tsx` dipindah ke `(app)/` | Hentikan dev server, hapus `.next`, build ulang |
+| TypeScript: `'bahan.data' is possibly 'null'` | TS tidak menyempitkan tipe setelah `if (galat) throw` yang menggabungkan 4 error | `const daftarBahan = bahan.data ?? []` |
+| Lint `react-hooks/set-state-in-effect` | Laci menu ditutup lewat `useEffect` yang memantau URL, sehingga render dua kali | Laci ditutup di `onClick` link |
+| (dicegah sebelum terjadi) `@apply btn` di Tailwind v4 | Di v4, kelas buatan sendiri harus didaftarkan dengan `@utility` supaya bisa di-`@apply` | `@utility btn { ... }` |
+| Pemilik login, tapi panel browser agent masih di halaman login | Login dilakukan di browser lain (Chrome), padahal sesi tiap browser terpisah. Agent memastikan lewat log server (ada login sukses + halaman terlindungi 200) dan cookie panel (kosong), sehingga bukan bug sesi hilang. | Pemilik login ulang di panel browser agent |
+| Pindah halaman pertama kali terasa diam ±3 detik | Dev server meng-compile halaman saat pertama dibuka; tidak ada indikator loading | Ditambah `loading.tsx` (kerangka abu-abu). Di produksi halaman sudah ter-compile. |
+
+### Hasil tes
+- `npm run build`, `npm run lint`, `tsc --noEmit`: lulus. 11 route dinamis + Proxy aktif.
+- Buka `/purchase-order` tanpa login → dialihkan ke `/login?next=%2Fpurchase-order`.
+- Login dengan email/password palsu buatan agent → "Email atau password salah.", email tetap terisi, password dikosongkan.
+- Setelan Supabase: `disable_signup: true`; 1 akun admin terkonfirmasi.
+- Setelah pemilik login: dashboard menampilkan **9/16 bahan kritis, 3/8 produk kritis, 3 PO berjalan, 8 pesanan berjalan**. Angkanya cocok dengan isi database hasil seed M1, jadi jalur data untuk role authenticated terbukti.
+- Desktop 1280 px: sidebar tetap, menu aktif tersorot, navigasi ke `/bahan-baku` berhasil.
+- Mobile 375 px: header + tombol ☰, laci menu terbuka dengan latar gelap, klik link menutup laci, kartu dashboard tersusun satu kolom.
+- **Belum diuji di browser**: tombol "Keluar". Sengaja tidak diklik supaya sesi panel tetap terpakai untuk M3–M8; akan diuji di M9.
+- Screenshot: `m2-login.jpg`, `m2-login-salah.jpg`, `m2-dashboard-desktop.png`, `m2-halaman-placeholder.png`, `m2-menu-mobile.png`, `m2-dashboard-mobile.png`.
+
+### Campur tangan pemilik
+- Mematikan "Allow new users to sign up" dan membuat akun admin (Auto Confirm) di dashboard Supabase.
+- Login di panel browser agent (agent tidak boleh mengetik password asli).

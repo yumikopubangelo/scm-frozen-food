@@ -33,10 +33,19 @@ Opsional (M8b): ramalan permintaan dari model S4 milik pemilik proyek, dijalanka
 
 ```
 src/
-  app/                 # routing App Router (1 folder = 1 halaman), UI bahasa Indonesia
-  components/          # komponen UI bersama (sidebar, tabel, form, badge status)
+  proxy.ts             # (Next 16 = pengganti middleware) refresh sesi + redirect ke /login
+  app/
+    login/             # halaman login + Server Action login/logout (di luar group, tanpa sidebar)
+    (app)/             # route group: SEMUA halaman yang wajib login; layout.tsx = cek login + sidebar
+      page.tsx         # dashboard
+      supplier/ ...    # 1 folder = 1 halaman menu
+  components/
+    navigasi.ts        # daftar menu sidebar (satu-satunya sumber)
+    app-shell.tsx      # sidebar desktop + laci menu mobile
+    judul-halaman.tsx  # JudulHalaman, SegeraHadir
   lib/
-    supabase/          # pembuat klien Supabase (server.ts, client.ts)
+    auth.ts            # wajibLogin(): verifikasi sesi di server (getClaims)
+    supabase/          # server.ts (klien per request), proxy.ts (updateSession)
 supabase/
   migrations/          # SQL skema + fungsi stok, diberi nomor urut (0001_..., 0002_...)
   seed.sql             # data contoh (frozen food Tasikmalaya)
@@ -52,6 +61,7 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 - **Stok HANYA berubah lewat fungsi Postgres** (`terima_po`, `catat_produksi`, `kirim_pesanan`, …) yang berjalan dalam satu transaksi dan menulis `mutasi_stok`. Ini dipaksa di level database: role `authenticated` tidak punya hak UPDATE kolom `stok`/`status`. Panggil dari aplikasi dengan `supabase.rpc("terima_po", { p_po_id })`. Detail: `docs/alur-stok.md`.
 - **Mengubah skema:** buat migrasi baru `supabase/migrations/000N_....sql` (jangan edit migrasi yang sudah terpasang), lalu `npm run db:migrate`. Kalau menambah tabel/fungsi, ingat beri GRANT + RLS seperti di `0003_hak_akses.sql` (hak bawaan sengaja dicabut).
 - **Mutasi data** lewat Server Actions (`"use server"`) lalu `revalidatePath`. Pembacaan data di Server Component.
+- **Halaman baru:** taruh di `src/app/(app)/<nama>/page.tsx` (otomatis wajib login), tambahkan ke `components/navigasi.ts`, pakai `JudulHalaman` + kelas `.card` `.input` `.btn-primary` dari `globals.css`. Screenshot untuk laporan JANGAN menampilkan email admin (footer sidebar) — crop.
 - **Keamanan:** RLS menyala di semua tabel; hanya pengguna `authenticated` yang boleh baca/tulis. Jangan pernah commit secret — pakai `.env.local` (lokal) dan Environment Variables Vercel (produksi). `DATABASE_URL` hanya untuk skrip lokal.
 - **Format angka/tanggal:** `Intl` dengan locale `id-ID` (Rp, tanggal Indonesia).
 - **Setiap milestone:** tes (build + lint + skenario), perbarui `PROSES.md`, lalu commit `M<n>: <ringkasan>`.
@@ -79,7 +89,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 |---|---|---|
 | M0 | Setup proyek | selesai |
 | M1 | Skema DB + fungsi stok + seed | selesai |
-| M2 | Login + layout | belum |
+| M2 | Login + layout | selesai |
 | M3 | Master data + BOM | belum |
 | M4 | Purchase Order | belum |
 | M5 | Produksi | belum |
