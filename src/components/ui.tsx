@@ -21,6 +21,9 @@ const PESAN_OK: Record<string, string> = {
   ditambah: "Data berhasil ditambahkan.",
   diubah: "Perubahan berhasil disimpan.",
   dihapus: "Data berhasil dihapus.",
+  "po-dikirim": "PO dikirim ke supplier. Isinya kini terkunci.",
+  "po-diterima": "Barang diterima. Stok bahan baku sudah bertambah.",
+  "po-dibatalkan": "PO dibatalkan.",
 };
 
 /** Banner hijau setelah simpan/hapus (dibaca dari ?ok=...). */
@@ -47,6 +50,15 @@ export function Badge({ warna, children }: { warna: keyof typeof WARNA_BADGE; ch
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${WARNA_BADGE[warna]}`}>
       {children}
+    </span>
+  );
+}
+
+/** Badge status dokumen (PO / pesanan). */
+export function BadgeStatus({ info }: { info: { label: string; warna: keyof typeof WARNA_BADGE; arti?: string } }) {
+  return (
+    <span title={info.arti}>
+      <Badge warna={info.warna}>{info.label}</Badge>
     </span>
   );
 }

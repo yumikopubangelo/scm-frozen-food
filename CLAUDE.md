@@ -45,6 +45,7 @@ src/
         form-supplier.tsx  # client form (useActionState), dipakai baru & ubah
         actions.ts     #   Server Action simpan (id null = tambah) & hapus
       produk/editor-bom.tsx  # editor resep (BOM) per produk
+      purchase-order/  # daftar (tab status + paginasi), baru (baris dinamis -> JSON), [id] (linimasa, aksi status, edit item saat draft, WA)
   components/
     navigasi.ts        # daftar menu sidebar (satu-satunya sumber)
     app-shell.tsx      # sidebar desktop + laci menu mobile
@@ -53,16 +54,19 @@ src/
     ui.tsx             # Tabel, Badge, BadgeStok, Pencarian, BannerOk, TombolTambah, Kembali
     tombol-hapus.tsx   # hapus + konfirmasi + tampilkan pesan error FK
     stok-opname.tsx    # form stok opname (rpc sesuaikan_stok)
+    tombol-aksi.tsx    # tombol + konfirmasi untuk Server Action status (kirim/terima/batal)
+    paginasi.tsx       # Paginasi (.range + count) & TabStatus
   lib/
     auth.ts            # wajibLogin(): verifikasi sesi di server (getClaims)
     supabase/          # server.ts (klien per request), proxy.ts (updateSession)
     validasi.ts        # skema zod: teksWajib, angkaWajib (koma desimal), bacaForm -> StatusForm
     galat-db.ts        # kode error Postgres -> kalimat Indonesia
-    format.ts          # rupiah(), angka(), tanggal(), kodeBerikutnya()
+    format.ts          # rupiah(), angka(), tanggal(), hariIni() WIB, tambahHari(), nomorWa(), kodeBerikutnya()
     cari.ts            # filterCari() aman untuk PostgREST .or()
     hitung-produk.ts   # biaya bahan per pak, kapasitas produksi dari BOM
     aksi-stok.ts       # Server Action stok opname
     tipe.ts            # tipe baris tabel
+    status.ts          # label/warna/arti status PO & pesanan
     *.test.ts          # unit test Vitest (npm test)
 supabase/
   migrations/          # SQL skema + fungsi stok, diberi nomor urut (0001_..., 0002_...)
@@ -82,6 +86,7 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 - **Halaman baru:** taruh di `src/app/(app)/<nama>/page.tsx` (otomatis wajib login), tambahkan ke `components/navigasi.ts`, pakai `JudulHalaman` + kelas `.card` `.input` `.btn-primary` dari `globals.css`. Screenshot untuk laporan JANGAN menampilkan email admin (footer sidebar) — crop.
 - **Keamanan:** RLS menyala di semua tabel; hanya pengguna `authenticated` yang boleh baca/tulis. Jangan pernah commit secret — pakai `.env.local` (lokal) dan Environment Variables Vercel (produksi). `DATABASE_URL` hanya untuk skrip lokal.
 - **Format angka/tanggal:** `Intl` dengan locale `id-ID` (Rp, tanggal Indonesia). Input angka menerima koma desimal; `Field` menampilkan angka dengan koma.
+- **Perubahan status dokumen** selalu `supabase.rpc(...)` lalu `redirect(...?ok=<aksi>)` supaya banner sesuai. Form dengan baris dinamis (state React) pakai `onSubmit` + `startTransition`, BUKAN `action=`, agar React 19 tidak mereset form.
 - **Form:** validasi di server dengan zod (`lib/validasi.ts`), kembalikan `StatusForm` (galat per kolom + isian terakhir). Error Supabase selalu lewat `pesanGalat()`. Data yang punya riwayat transaksi tidak bisa dihapus (FK RESTRICT) — itu disengaja.
 - **Setiap milestone:** tes (build + lint + skenario), perbarui `PROSES.md`, lalu commit `M<n>: <ringkasan>`.
 
@@ -114,7 +119,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M1 | Skema DB + fungsi stok + seed | selesai |
 | M2 | Login + layout | selesai |
 | M3 | Master data + BOM | selesai |
-| M4 | Purchase Order | belum |
+| M4 | Purchase Order | selesai |
 | M5 | Produksi | belum |
 | M6 | Pesanan & pengiriman | belum |
 | M7 | Dashboard | belum |

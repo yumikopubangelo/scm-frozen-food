@@ -224,3 +224,50 @@ Tidak ada. Langkah berikutnya (M1) butuh pemilik membuat project Supabase.
 
 ### Campur tangan pemilik
 Tidak ada.
+
+---
+
+## M4 — Purchase Order: draft → dikirim → diterima (21 Nov 2026)
+
+### Yang dikerjakan
+- **Daftar PO**: tab status dengan jumlah per status, filter nomor & supplier, **paginasi** 25 per halaman (±790 PO), badge PO buatan agen, dan keterangan "Perkiraan tiba / **Terlambat N hari** / Diterima tgl".
+- **Form PO baru**: pilih supplier, lalu **baris bahan dinamis** (tambah/hapus). Bahan milik supplier tampil di grup teratas; harga terisi otomatis; stok & reorder point ditampilkan; subtotal/total dihitung langsung. Link `?supplier=<id>` memilih supplier otomatis.
+- **Detail PO**: linimasa (Dibuat → Dikirim → Diterima, dengan perkiraan tiba), tombol aksi sesuai status (**Kirim ke supplier**, **Terima barang**, **Batalkan**), **edit item selama draft** (ubah jumlah/harga, hapus, tambah bahan), daftar "Masuk gudang bahan baku" setelah diterima (+qty → stok baru), catatan PO, dan tombol **pesan WhatsApp** ke supplier.
+- Tampilan khusus draft dari **agen restock** (M8): penjelasan + tombol "Setujui & kirim ke supplier".
+- Komponen baru: `TombolAksi`, `Paginasi`, `TabStatus`, `BadgeStatus`; `lib/status.ts`; `hariIni()` (WIB), `tambahHari()`, `selisihHari()`, `nomorWa()`.
+- **9 unit test baru** (total 24): tanggal WIB di batas tengah malam, pergantian bulan/tahun, normalisasi nomor WA, format angka.
+- `docs/purchase-order.md`.
+
+### Keputusan teknis
+1. **Semua perubahan status lewat fungsi database** (`kirim_po`, `terima_po`, `batalkan_po`). Hasilnya atomik, tidak bisa diterima dua kali (kunci baris), dan isi PO terkunci setelah dikirim (trigger).
+2. **"Kirim ke supplier" = persetujuan admin.** Agen restock nanti hanya membuat draft. Tidak ada jalan bagi agen untuk mengirim PO.
+3. **Baris dinamis dikirim sebagai JSON** dalam satu kolom tersembunyi, divalidasi zod di server (termasuk tolak bahan ganda), lalu `buat_po` membuat header + item dalam satu transaksi.
+4. **Paginasi di server** (`.range()`): PostgREST maksimal mengirim 1.000 baris per request. Tanpa paginasi, PO lama akan "hilang" diam-diam begitu data bertambah.
+5. **Tanggal dalam WIB** di aplikasi (`hariIni()`), sama dengan `public.hari_ini()` di database. Dengan UTC, pukul 00.00–07.00 WIB akan dianggap masih kemarin; ada unit test untuk kasus ini.
+6. **WhatsApp tanpa API**: cukup link `wa.me` dengan pesan terisi. Tidak perlu API key berbayar, dan pesan tidak terkirim sebelum admin sendiri menekan kirim.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| (dicegah sebelum terjadi) baris bahan bisa hilang kalau server menolak form | React 19 mereset form setelah `action` selesai; baris disimpan di state React | Form PO memakai `onSubmit` + `startTransition`, yang tidak memicu reset. Diuji: submit tanpa supplier menampilkan "Pilih supplier" dan baris tetap utuh |
+| Banner "Data berhasil ditambahkan" tetap tampil setelah PO dikirim/diterima | URL masih `?ok=ditambah` | Action status melakukan redirect ke `?ok=po-dikirim / po-diterima / po-dibatalkan` |
+| Teks "dibatalkan" muncul dua kali di PO batal | Paragraf merah + keterangan status | Paragraf merah dihapus |
+| Scrollbar vertikal kecil di tab status | Garis bawah tab `-mb-px` menimpa container `overflow-x-auto` | `overflow-y-hidden` |
+| Setelah klik simpan, halaman tampak tidak berpindah selama ±5 detik | Dev server meng-compile halaman detail saat pertama dibuka (bukan error) | Dicek ulang: halaman sudah di `/purchase-order/796`. Di produksi halaman sudah ter-compile |
+| Id PO melompat 792 → 796 | Tes skenario DB yang di-rollback tetap memakai nomor sequence | Perilaku normal Postgres; dicatat di docs |
+| Perintah agent macet ±2 menit | Agent menulis `python3 -` yang menunggu input keyboard | Proses dihentikan, perubahan dijalankan lewat skrip berkas. Dicek: `CLAUDE.md` tidak sempat berubah setengah jalan |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 24/24. Tes skenario DB 19/19**, termasuk cek buku besar: **21.720 baris = 21.718 sebelumnya + 2 mutasi** dari PO yang diterima saat uji browser. Stok tetap sama dengan total mutasinya.
+- **Uji siklus penuh di browser**:
+  1. Daftar: Semua 792 · Draft 1 · Dikirim 2 · Diterima 789; 32 halaman; PO 18 Nov ke Pangandaran tampil "Terlambat 1 hari".
+  2. PO baru tanpa supplier → "Pilih supplier", baris Bawang merah 2 kg tetap ada. Pilih **Kios Bumbu Bu Imas** → bahan supplier itu pindah ke grup teratas; tambah baris Bawang putih 1 kg → simpan → **PO-261121-0796** (draft, Rp 122.000).
+  3. Draft: ubah Bawang putih menjadi 1,5 kg → total Rp 141.000 ✔. Pesan WA: nomor `6285720041104`, isi daftar bahan ✔ (tidak dibuka/dikirim).
+  4. **Kirim** → status Dikirim, item terkunci, perkiraan tiba 22 Nov (lead time 1 hari).
+  5. **Terima** → status Diterima: **Bawang merah 2 → 4 kg (+2), Bawang putih 2,9 → 4,4 kg (+1,5)** ✔.
+  6. PO tes lain (plastik 100 pcs) → **Batalkan** → banner "PO dibatalkan.", tanpa tombol aksi.
+- Data yang berubah karena uji: 1 PO diterima (stok Bawang merah & Bawang putih bertambah, tercatat di mutasi) dan 1 PO dibatalkan. Keduanya transaksi sah. Kekurangan telur sengaja tidak disentuh supaya tetap menjadi kasus nyata untuk agen restock.
+- Screenshot: `m4-po-daftar.png`, `m4-po-baru-validasi.jpg`, `m4-po-draft.jpg`, `m4-po-diterima.png`.
+
+### Campur tangan pemilik
+Tidak ada.
