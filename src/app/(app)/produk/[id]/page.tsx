@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { JudulHalaman } from "@/components/judul-halaman";
@@ -7,6 +8,7 @@ import { BadgeStok, BannerOk, Kembali } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { sesuaikanStok } from "@/lib/aksi-stok";
 import { angka, rupiah } from "@/lib/format";
+import { cekGalatMuat } from "@/lib/galat-db";
 import { biayaBahanPerPak, kapasitasProduksi } from "@/lib/hitung-produk";
 import type { BarisBom, Produk } from "@/lib/tipe";
 import { hapusProduk, simpanProduk } from "../actions";
@@ -21,7 +23,7 @@ export default async function ProdukDetailPage({ params, searchParams }: PagePro
   const sp = await searchParams;
 
   const supabase = await createClient();
-  const [{ data: p }, { data: bom }, { data: bahan }] = await Promise.all([
+  const [{ data: p, error: e1 }, { data: bom, error: e2 }, { data: bahan, error: e3 }] = await Promise.all([
     supabase.from("produk").select("*").eq("id", id).maybeSingle<Produk>(),
     supabase
       .from("bom")
@@ -30,6 +32,7 @@ export default async function ProdukDetailPage({ params, searchParams }: PagePro
       .order("id"),
     supabase.from("bahan_baku").select("id, nama, satuan").order("nama"),
   ]);
+  cekGalatMuat(e1, e2, e3);
   if (!p) notFound();
 
   const baris = (bom ?? []) as unknown as BarisBom[];
@@ -64,7 +67,16 @@ export default async function ProdukDetailPage({ params, searchParams }: PagePro
         <JudulHalaman
           judul={p.nama}
           deskripsi={`Kode ${p.kode} · harga jual ${rupiah(p.harga_jual)}`}
-          aksi={<TombolHapus aksi={hapusProduk.bind(null, id)} nama={`produk ${p.nama}`} />}
+          aksi={
+            <>
+              {baris.length > 0 && (
+                <Link href={`/produksi/baru?produk=${id}`} className="btn-primary">
+                  Catat produksi
+                </Link>
+              )}
+              <TombolHapus aksi={hapusProduk.bind(null, id)} nama={`produk ${p.nama}`} />
+            </>
+          }
         />
         <BannerOk ok={sp.ok} />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

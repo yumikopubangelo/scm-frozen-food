@@ -8,6 +8,7 @@ import { Badge, BadgeStatus, BannerOk, Kembali } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { angka, hariIni, nomorWa, rupiah, selisihHari, tambahHari, tanggal } from "@/lib/format";
 import { STATUS_PO, type StatusPo } from "@/lib/status";
+import { cekGalatMuat } from "@/lib/galat-db";
 import { batalkanPo, kirimPo, simpanCatatanPo, terimaPo } from "../actions";
 import { CatatanPo } from "../catatan-po";
 import { EditorItemPo, type ItemPo } from "../editor-item-po";
@@ -35,7 +36,7 @@ export default async function PoDetailPage({ params, searchParams }: PageProps<"
   const sp = await searchParams;
 
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("purchase_order")
     .select(
       "id, nomor, status, sumber, tanggal, tanggal_dikirim, tanggal_diterima, catatan, supplier(id, nama, kontak, telepon, lead_time_hari), po_item(id, qty, harga_satuan, bahan_baku(id, nama, satuan))",
@@ -43,6 +44,7 @@ export default async function PoDetailPage({ params, searchParams }: PageProps<"
     .eq("id", id)
     .order("id", { referencedTable: "po_item" })
     .maybeSingle();
+  cekGalatMuat(error);
   if (!data) notFound();
   const po = data as unknown as Po;
 

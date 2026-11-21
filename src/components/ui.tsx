@@ -24,6 +24,7 @@ const PESAN_OK: Record<string, string> = {
   "po-dikirim": "PO dikirim ke supplier. Isinya kini terkunci.",
   "po-diterima": "Barang diterima. Stok bahan baku sudah bertambah.",
   "po-dibatalkan": "PO dibatalkan.",
+  "produksi-dicatat": "Produksi dicatat. Stok bahan berkurang sesuai resep dan stok produk bertambah.",
 };
 
 /** Banner hijau setelah simpan/hapus (dibaca dari ?ok=...). */

@@ -5,6 +5,7 @@ import { TombolHapus } from "@/components/tombol-hapus";
 import { Kembali } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { rupiah } from "@/lib/format";
+import { cekGalatMuat } from "@/lib/galat-db";
 import type { Reseller } from "@/lib/tipe";
 import { hapusReseller, simpanReseller } from "../actions";
 import { FormReseller } from "../form-reseller";
@@ -16,11 +17,12 @@ export default async function ResellerDetailPage({ params }: PageProps<"/reselle
   if (!Number.isInteger(id)) notFound();
 
   const supabase = await createClient();
-  const [{ data: r }, { data: semua }, { data: pesanan }] = await Promise.all([
+  const [{ data: r, error: e1 }, { data: semua, error: e2 }, { data: pesanan, error: e3 }] = await Promise.all([
     supabase.from("reseller").select("*").eq("id", id).maybeSingle<Reseller>(),
     supabase.from("reseller").select("kota"),
     supabase.from("pesanan").select("status, pesanan_item(qty, harga_satuan)").eq("reseller_id", id).neq("status", "dibatalkan"),
   ]);
+  cekGalatMuat(e1, e2, e3);
   if (!r) notFound();
   const daftarKota = [...new Set((semua ?? []).map((x) => x.kota).filter(Boolean))].sort() as string[];
 

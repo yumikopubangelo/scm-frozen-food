@@ -8,6 +8,7 @@ import { BadgeStok, Kembali } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { sesuaikanStok } from "@/lib/aksi-stok";
 import { angka } from "@/lib/format";
+import { cekGalatMuat } from "@/lib/galat-db";
 import type { BahanBaku } from "@/lib/tipe";
 import { hapusBahan, simpanBahan } from "../actions";
 import { FormBahan } from "../form-bahan";
@@ -19,11 +20,12 @@ export default async function BahanDetailPage({ params }: PageProps<"/bahan-baku
   if (!Number.isInteger(id)) notFound();
 
   const supabase = await createClient();
-  const [{ data: b }, { data: supplier }, { data: dipakai }] = await Promise.all([
+  const [{ data: b, error: e1 }, { data: supplier, error: e2 }, { data: dipakai, error: e3 }] = await Promise.all([
     supabase.from("bahan_baku").select("*").eq("id", id).maybeSingle<BahanBaku>(),
     supabase.from("supplier").select("id, nama, lead_time_hari").order("nama"),
     supabase.from("bom").select("qty_per_unit, produk(id, nama)").eq("bahan_id", id),
   ]);
+  cekGalatMuat(e1, e2, e3);
   if (!b) notFound();
   const dipakaiDi = (dipakai ?? []) as unknown as { qty_per_unit: number; produk: { id: number; nama: string } }[];
 

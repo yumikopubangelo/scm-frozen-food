@@ -6,6 +6,7 @@ import { TombolHapus } from "@/components/tombol-hapus";
 import { BadgeStok, Kembali } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
 import { angka } from "@/lib/format";
+import { cekGalatMuat } from "@/lib/galat-db";
 import type { BahanBaku, Supplier } from "@/lib/tipe";
 import { hapusSupplier, simpanSupplier } from "../actions";
 import { FormSupplier } from "../form-supplier";
@@ -17,10 +18,11 @@ export default async function SupplierDetailPage({ params }: PageProps<"/supplie
   if (!Number.isInteger(id)) notFound();
 
   const supabase = await createClient();
-  const [{ data: s }, { data: bahan }] = await Promise.all([
+  const [{ data: s, error: e1 }, { data: bahan, error: e2 }] = await Promise.all([
     supabase.from("supplier").select("*").eq("id", id).maybeSingle<Supplier>(),
     supabase.from("bahan_baku").select("id, kode, nama, satuan, stok, reorder_point").eq("supplier_id", id).order("kode"),
   ]);
+  cekGalatMuat(e1, e2);
   if (!s) notFound();
   const daftarBahan = (bahan ?? []) as Pick<BahanBaku, "id" | "kode" | "nama" | "satuan" | "stok" | "reorder_point">[];
 

@@ -14,6 +14,17 @@ const NAMA_TABEL: Record<string, string> = {
   mutasi_stok: "riwayat mutasi stok",
 };
 
+/**
+ * Untuk halaman yang MEMBACA data: kalau query gagal (mis. Supabase sedang
+ * gangguan), lempar error supaya yang tampil halaman error, BUKAN "404 tidak
+ * ditemukan". Tanpa ini, data null karena gangguan terlihat sama dengan data
+ * yang memang tidak ada.
+ */
+export function cekGalatMuat(...galat: (GalatSupabase | null | undefined)[]) {
+  const e = galat.find(Boolean);
+  if (e) throw new Error(`Gagal memuat data dari database (${e.code ?? "tanpa kode"}): ${e.message}`);
+}
+
 export function pesanGalat(e: GalatSupabase): string {
   switch (e.code) {
     case "23505": // unique_violation
