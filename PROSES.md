@@ -271,3 +271,30 @@ Tidak ada.
 
 ### Campur tangan pemilik
 Tidak ada.
+
+---
+
+## M6 — Pesanan reseller & pengiriman: diproses → dikirim → diterima (21 Nov 2026)
+
+Dikerjakan oleh agent Lovable lewat GitHub (fork + pull request), mengikuti pola M4.
+
+### Yang dikerjakan
+- **Daftar pesanan** (`/pesanan`): tab status dengan jumlah, cari nomor, filter reseller, paginasi 25 per halaman, total per pesanan, dan label **Siap kirim / Stok kurang** untuk pesanan yang masih diproses.
+- **Pesanan baru**: pilih reseller, baris produk dinamis (harga jual terisi otomatis), stok gudang dan "setelah dikirim tersisa N" tampil per baris; peringatan kalau stok kurang (pesanan tetap boleh disimpan). `?reseller=<id>` memilih reseller otomatis.
+- **Detail pesanan**: linimasa (Pesanan masuk → Dikirim dari gudang → Diterima reseller), **Cek stok sebelum kirim** (stok sekarang → setelah kirim), tombol **Kirim pesanan (stok berkurang)** hanya muncul kalau semua stok cukup, peringatan + link ke Catat produksi untuk produk yang kurang, **Konfirmasi diterima**, **Batalkan**, edit item selama diproses, daftar **Keluar dari gudang barang jadi** dari buku besar, catatan, dan pesan WhatsApp ke reseller.
+- Halaman reseller: tombol **Buat pesanan** dan **Lihat pesanan**.
+- `lib/hitung-pesanan.ts` (`cekKirim`, `totalPesanan`, `stokCukup`) + 6 unit test; `CatatanPo` dipindah menjadi komponen umum `components/catatan-dokumen.tsx` (dipakai PO dan pesanan).
+- Tes skenario DB baru **4b: kirim → stok turun** (6 pemeriksaan). `docs/pesanan.md`.
+
+### Keputusan teknis
+1. **Tidak ada migrasi baru.** Fungsi `buat_pesanan`, `kirim_pesanan`, `terima_pesanan`, `batalkan_pesanan` dan trigger penjaga item sudah ada sejak M1; M6 hanya memanggilnya lewat `supabase.rpc`.
+2. **Tombol kirim disembunyikan kalau stok kurang**, diganti peringatan berisi link produksi. Database tetap menjadi penjaga terakhir (stok dicek ulang di dalam transaksi).
+3. **Jumlah pesanan bilangan bulat** (pak), sesuai kolom `pesanan_item.qty integer`; divalidasi zod sebelum ke database.
+
+### Hasil tes
+- `tsc`, `lint`, `next build`: lulus. **Unit test 37/37** (6 baru).
+- **Tes skenario DB 25/25** di Postgres 17 lokal (migrasi 0001–0004 + seed simulasi 12 bulan), termasuk 4b: stok Dimsum Ayam 40 → 25, Siomay 10 → 0, 2 baris mutasi keluar (total −25), kirim ganda ditolak, dan buku besar tetap konsisten (22.034 baris mutasi).
+- Belum diuji di browser dengan Supabase sungguhan (agent tidak punya kredensial Supabase proyek).
+
+### Campur tangan pemilik
+- Uji coba di browser setelah merge: buat pesanan → kirim → cek stok produk turun di halaman Produk & Mutasi stok. Ambil screenshot untuk laporan (`docs/screenshots/m6-*`).

@@ -46,6 +46,7 @@ src/
         actions.ts     #   Server Action simpan (id null = tambah) & hapus
       produk/editor-bom.tsx  # editor resep (BOM) per produk
       purchase-order/  # daftar (tab status + paginasi), baru (baris dinamis -> JSON), [id] (linimasa, aksi status, edit item saat draft, WA)
+      pesanan/         # pola sama dengan PO: diproses -> dikirim (rpc kirim_pesanan, stok produk turun) -> diterima; [id] = cek stok sebelum kirim
   components/
     navigasi.ts        # daftar menu sidebar (satu-satunya sumber)
     app-shell.tsx      # sidebar desktop + laci menu mobile
@@ -55,6 +56,7 @@ src/
     tombol-hapus.tsx   # hapus + konfirmasi + tampilkan pesan error FK
     stok-opname.tsx    # form stok opname (rpc sesuaikan_stok)
     tombol-aksi.tsx    # tombol + konfirmasi untuk Server Action status (kirim/terima/batal)
+    catatan-dokumen.tsx # form catatan satu baris (PO & pesanan)
     paginasi.tsx       # Paginasi (.range + count) & TabStatus
   lib/
     auth.ts            # wajibLogin(): verifikasi sesi di server (getClaims)
@@ -64,6 +66,7 @@ src/
     format.ts          # rupiah(), angka(), tanggal(), hariIni() WIB, tambahHari(), nomorWa(), kodeBerikutnya()
     cari.ts            # filterCari() aman untuk PostgREST .or()
     hitung-produk.ts   # biaya bahan per pak, kapasitas produksi dari BOM
+    hitung-pesanan.ts  # pratinjau kirim (stok setelah kirim, kekurangan), total pesanan
     aksi-stok.ts       # Server Action stok opname
     tipe.ts            # tipe baris tabel
     status.ts          # label/warna/arti status PO & pesanan
@@ -105,7 +108,7 @@ npx next typegen             # kalau PageProps<"/rute/baru"> error: buat ulang t
 # database (butuh DATABASE_URL = Session pooler di .env.local)
 npm run db:migrate           # pasang migrasi yang belum terpasang
 npm run db:seed              # data contoh + simulasi 12 bulan (~1,5 menit)
-npm run db:test              # 19 tes skenario stok (di-rollback)
+npm run db:test              # 25 tes skenario stok (di-rollback)
 npm run db:reset -- --ya     # HAPUS semua objek aplikasi (dev saja)
 ```
 
@@ -121,7 +124,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M3 | Master data + BOM | selesai |
 | M4 | Purchase Order | selesai |
 | M5 | Produksi | belum |
-| M6 | Pesanan & pengiriman | belum |
+| M6 | Pesanan & pengiriman | selesai |
 | M7 | Dashboard | belum |
 | M8 | Agen restock (+ M8b S4 opsional) | belum |
 | M9 | Deploy GitHub + Vercel | belum |

@@ -10,7 +10,7 @@ import { angka, hariIni, nomorWa, rupiah, selisihHari, tambahHari, tanggal } fro
 import { STATUS_PO, type StatusPo } from "@/lib/status";
 import { cekGalatMuat } from "@/lib/galat-db";
 import { batalkanPo, kirimPo, simpanCatatanPo, terimaPo } from "../actions";
-import { CatatanPo } from "../catatan-po";
+import { CatatanDokumen } from "@/components/catatan-dokumen";
 import { EditorItemPo, type ItemPo } from "../editor-item-po";
 
 export const metadata: Metadata = { title: "Detail PO" };
@@ -222,7 +222,7 @@ export default async function PoDetailPage({ params, searchParams }: PageProps<"
       )}
 
       <section className="card p-5">
-        <CatatanPo aksi={simpanCatatanPo.bind(null, id)} awal={po.catatan} />
+        <CatatanDokumen aksi={simpanCatatanPo.bind(null, id)} awal={po.catatan} />
         <p className="mt-3 text-xs text-slate-500">
           Supplier:{" "}
           <Link href={`/supplier/${po.supplier.id}`} className="text-sky-700 hover:underline">
