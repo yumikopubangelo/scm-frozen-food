@@ -140,7 +140,7 @@ Hasil seed (pada uji coba): 8 supplier, 16 bahan, 8 produk, 12 reseller, 57 bari
 ```bash
 npm run db:migrate         # pasang skema + fungsi + hak akses (yang belum terpasang)
 npm run db:seed            # isi data contoh (±1–3 menit)
-npm run db:test            # 19 tes skenario; perubahan di-rollback, data tidak berubah
+npm run db:test            # 25 tes skenario; perubahan di-rollback, data tidak berubah
 npm run db:reset -- --ya   # HAPUS semua, lalu ulangi migrate + seed
 ```
 

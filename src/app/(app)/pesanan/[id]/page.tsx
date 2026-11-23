@@ -23,10 +23,11 @@ type Pesanan = {
   tanggal_kirim: string | null;
   tanggal_terima: string | null;
   catatan: string | null;
-  reseller: { id: number; nama: string; telepon: string | null; alamat: string | null; kota: string | null };
+  reseller: { id: number; nama: string; tipe: "reseller" | "toko"; telepon: string | null; alamat: string | null; kota: string | null };
   pesanan_item: ItemPesanan[];
 };
-type Mutasi = { qty: number; stok_setelah: number; produk: { nama: string; satuan: string } | null };
+
+type Mutasi = { qty: number; stok_setelah: number; produk: { id: number; nama: string; satuan: string } | null };
 
 export default async function PesananDetailPage({ params, searchParams }: PageProps<"/pesanan/[id]">) {
   const id = Number((await params).id);
@@ -37,7 +38,7 @@ export default async function PesananDetailPage({ params, searchParams }: PagePr
   const { data, error } = await supabase
     .from("pesanan")
     .select(
-      "id, nomor, status, tanggal, tanggal_kirim, tanggal_terima, catatan, reseller(id, nama, telepon, alamat, kota), pesanan_item(id, qty, harga_satuan, produk(id, nama, satuan, stok))",
+      "id, nomor, status, tanggal, tanggal_kirim, tanggal_terima, catatan, reseller(id, nama, tipe, telepon, alamat, kota), pesanan_item(id, qty, harga_satuan, produk(id, nama, satuan, stok))",
     )
     .eq("id", id)
     .order("id", { referencedTable: "pesanan_item" })
@@ -46,10 +47,13 @@ export default async function PesananDetailPage({ params, searchParams }: PagePr
   if (!data) notFound();
   const ps = data as unknown as Pesanan;
 
+  const sudahKeluar = ps.status === "dikirim" || ps.status === "diterima";
   const [{ data: semuaProduk, error: e2 }, { data: mutasi, error: e3 }] = await Promise.all([
-    ps.status === "diproses" ? supabase.from("produk").select("id, nama, satuan, stok").order("kode") : Promise.resolve({ data: [], error: null }),
-    ps.status === "dikirim" || ps.status === "diterima"
-      ? supabase.from("mutasi_stok").select("qty, stok_setelah, produk(nama, satuan)").eq("sumber", "pesanan").eq("ref_id", id).order("id")
+    ps.status === "diproses"
+      ? supabase.from("produk").select("id, nama, satuan, stok").order("nama")
+      : Promise.resolve({ data: [], error: null }),
+    sudahKeluar
+      ? supabase.from("mutasi_stok").select("qty, stok_setelah, produk(id, nama, satuan)").eq("sumber", "pesanan").eq("ref_id", id).order("id")
       : Promise.resolve({ data: [], error: null }),
   ]);
   cekGalatMuat(e2, e3);

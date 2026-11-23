@@ -141,6 +141,60 @@ begin
   raise notice 'LULUS: pesanan yang belum dikirim bisa dibatalkan';
 end $$;
 
+-- ---------- 4b. Skenario M6: kirim pesanan -> stok produk turun ----------
+-- Pesanan 2 produk, satu di antaranya stoknya PAS. Item diubah selama
+-- diproses, lalu dikirim: stok turun persis sejumlah pesanan, dua baris
+-- mutasi keluar tercatat, dan pesanan terkunci setelah dikirim.
+do $$
+declare
+  v_p1  bigint := (select id from public.produk where kode = 'PJ-01');
+  v_p2  bigint := (select id from public.produk where kode = 'PJ-02');
+  v_res bigint := (select id from public.reseller where kode = 'RSL-02');
+  v_ps  bigint;
+begin
+  perform public.sesuaikan_stok(null, v_p1, 40, 'persiapan tes M6');
+  perform public.sesuaikan_stok(null, v_p2, 10, 'persiapan tes M6');
+
+  v_ps := public.buat_pesanan(v_res, jsonb_build_array(
+            jsonb_build_object('produk_id', v_p1, 'qty', 12),
+            jsonb_build_object('produk_id', v_p2, 'qty', 10)));
+  assert (select harga_satuan from public.pesanan_item where pesanan_id = v_ps and produk_id = v_p1) = 25000,
+         'harga default dari harga jual produk';
+
+  -- admin mengubah jumlah selama pesanan masih diproses (seperti di halaman detail)
+  update public.pesanan_item set qty = 15 where pesanan_id = v_ps and produk_id = v_p1;
+  assert (select stok from public.produk where id = v_p1) = 40, 'mengubah item tidak mengubah stok';
+  assert not exists (select 1 from public.mutasi_stok where sumber = 'pesanan' and ref_id = v_ps),
+         'belum ada mutasi sebelum dikirim';
+
+  perform public.kirim_pesanan(v_ps);
+  assert (select stok from public.produk where id = v_p1) = 25, 'stok PJ-01 harus 40 - 15 = 25';
+  assert (select stok from public.produk where id = v_p2) = 0, 'stok PJ-02 harus 10 - 10 = 0 (stok pas boleh dikirim)';
+  assert (select count(*) from public.mutasi_stok where sumber = 'pesanan' and ref_id = v_ps) = 2,
+         'harus ada 2 baris mutasi keluar';
+  assert (select sum(qty) from public.mutasi_stok where sumber = 'pesanan' and ref_id = v_ps) = -25,
+         'total mutasi keluar harus -25';
+  assert (select stok_setelah from public.mutasi_stok where sumber = 'pesanan' and ref_id = v_ps and produk_id = v_p1) = 25,
+         'stok_setelah di buku besar = stok baru';
+  assert (select status from public.pesanan where id = v_ps) = 'dikirim', 'status menjadi dikirim';
+  assert (select tanggal_kirim from public.pesanan where id = v_ps) is not null, 'tanggal kirim terisi';
+  raise notice 'LULUS: kirim 2 produk -> stok PJ-01 40 -> 25, PJ-02 10 -> 0, 2 mutasi keluar tercatat';
+
+  perform pg_temp.harus_gagal(format('select public.kirim_pesanan(%s)', v_ps), 'hanya pesanan diproses',
+                              'pesanan tidak bisa dikirim dua kali');
+  assert (select stok from public.produk where id = v_p1) = 25, 'kirim ganda tidak mengurangi stok lagi';
+  perform pg_temp.harus_gagal(format('update public.pesanan_item set qty = 1 where pesanan_id = %s', v_ps),
+                              'tidak bisa diubah', 'item pesanan terkunci setelah dikirim');
+  perform pg_temp.harus_gagal(format('update public.pesanan set status = ''diterima'' where id = %s', v_ps),
+                              'permission denied', 'status pesanan tidak bisa diubah langsung oleh aplikasi');
+  perform pg_temp.harus_gagal(format('select public.batalkan_pesanan(%s)', v_ps), 'hanya pesanan diproses',
+                              'pesanan yang sudah dikirim tidak bisa dibatalkan');
+
+  perform public.terima_pesanan(v_ps);
+  assert (select stok from public.produk where id = v_p1) = 25, 'diterima tidak mengubah stok';
+  raise notice 'LULUS: pesanan terkunci setelah dikirim; diterima tidak mengubah stok';
+end $$;
+
 -- ---------- 5. Konsistensi buku besar ----------
 -- Untuk SETIAP barang: stok di master = jumlah semua mutasinya.
 do $$

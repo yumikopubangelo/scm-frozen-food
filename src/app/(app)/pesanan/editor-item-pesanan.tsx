@@ -67,6 +67,17 @@ function BarisItem({ pesananId, item, bisaHapus }: { pesananId: number; item: It
         </div>
       </td>
       <td>
+        <input
+          form={formId}
+          key={`h${status.versi ?? 0}`}
+          name="harga_satuan"
+          defaultValue={status.nilai?.harga_satuan ?? koma(item.harga_satuan)}
+          inputMode="decimal"
+          className="input w-32"
+          aria-label={`Harga ${item.produk.nama}`}
+        />
+      </td>
+      <td className="whitespace-nowrap text-right tabular-nums">{rupiah(Number(item.qty) * Number(item.harga_satuan))}</td>
         <input form={formId} key={`h${status.versi ?? 0}`} name="harga_satuan" defaultValue={status.nilai?.harga_satuan ?? String(item.harga_satuan)} inputMode="decimal" className="input w-28" aria-label={`Harga ${item.produk.nama}`} />
       </td>
       <td className={`whitespace-nowrap text-right tabular-nums ${kurang > 0 ? "font-medium text-red-700" : "text-slate-600"}`}>

@@ -52,6 +52,14 @@ export default async function ResellerDetailPage({ params }: PageProps<"/reselle
           </>
         }
       />
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Link href={`/pesanan/baru?reseller=${id}`} className="btn-secondary">
+          Buat pesanan
+        </Link>
+        <Link href={`/pesanan?reseller=${id}`} className="btn-secondary">
+          Lihat pesanan
+        </Link>
+      </div>
       <FormReseller aksi={simpanReseller.bind(null, id)} awal={r} daftarKota={daftarKota} />
     </div>
   );

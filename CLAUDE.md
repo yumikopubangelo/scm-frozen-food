@@ -52,6 +52,7 @@ src/
       produksi/        # daftar (ringkasan 30 hari + paginasi), baru (pratinjau kebutuhan bahan), [id] (bahan keluar, perkiraan biaya)
       pesanan/         # daftar (tab status, siap kirim/stok kurang), baru (baris dinamis), [id] (kirim/terima/batal, edit saat diproses, WA reseller)
       purchase-order/  # daftar (tab status + paginasi), baru (baris dinamis -> JSON), [id] (linimasa, aksi status, edit item saat draft, WA)
+      pesanan/         # pola sama dengan PO: diproses -> dikirim (rpc kirim_pesanan, stok produk turun) -> diterima; [id] = cek stok sebelum kirim
   components/
     navigasi.ts        # daftar menu sidebar (satu-satunya sumber)
     app-shell.tsx      # sidebar desktop + laci menu mobile
@@ -62,6 +63,7 @@ src/
     stok-opname.tsx    # form stok opname (rpc sesuaikan_stok)
     catatan.tsx        # CatatanDokumen: form catatan PO/pesanan
     tombol-aksi.tsx    # tombol + konfirmasi untuk Server Action status (kirim/terima/batal)
+    catatan-dokumen.tsx # form catatan satu baris (PO & pesanan)
     paginasi.tsx       # Paginasi (.range + count) & TabStatus
     grafik.tsx         # GrafikBatang & GrafikStok: SVG murni di Server Component (tanpa pustaka grafik)
   lib/
