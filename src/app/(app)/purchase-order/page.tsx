@@ -4,6 +4,7 @@ import { JudulHalaman } from "@/components/judul-halaman";
 import { Paginasi, TabStatus } from "@/components/paginasi";
 import { Badge, BadgeStatus, BannerOk, Tabel, TabelKosong, TombolTambah } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
+import { kembaliKeHalaman1 } from "@/lib/galat-db";
 import { paramTeks } from "@/lib/cari";
 import { hariIni, rupiah, selisihHari, tambahHari, tanggal } from "@/lib/format";
 import { STATUS_PO, type StatusPo } from "@/lib/status";
@@ -62,6 +63,7 @@ export default async function PurchaseOrderPage({ searchParams }: PageProps<"/pu
     hitung("diterima"),
     hitung("dibatalkan"),
   ]);
+  kembaliKeHalaman1(error, "/purchase-order", { status, supplier: supplierId, q });
   if (error) throw new Error(error.message);
   const daftar = (data ?? []) as unknown as Baris[];
   const hari = hariIni();

@@ -356,3 +356,47 @@ Tidak ada.
 
 ### Campur tangan pemilik
 - Memberi izin push M5 ke GitHub.
+
+## M7 — Dashboard & buku besar mutasi stok (23 Nov 2026)
+
+### Yang dikerjakan
+- **Dashboard lengkap** (`/`):
+  - 4 kartu yang bisa diklik: bahan di bawah ROP (+ berapa yang belum punya PO), produk di bawah stok minimum, PO berjalan (draft/dikirim/**terlambat**), pesanan berjalan (diproses/siap kirim/dikirim).
+  - Banner kuning "N bahan kritis belum punya PO" dengan tombol **Jalankan agen restock** (halaman agen menyusul di M8).
+  - **Grafik pergerakan stok 30 hari**: (1) arus barang jadi dalam pak, diproduksi vs dikirim; (2) nilai bahan baku dalam rupiah, diterima dari PO vs terpakai produksi.
+  - Tabel **bahan kritis**, diurutkan dari yang paling jauh di bawah ROP, dengan kolom "sedang dipesan" atau tautan **Buat PO**. Tabel **stok barang jadi** dibandingkan pesanan yang belum dikirim, dengan tautan produksi kalau kurang.
+  - Daftar **PO berjalan** (perkiraan tiba, badge terlambat, badge agen) dan **pesanan berjalan** (siap kirim / stok kurang).
+- **Halaman Mutasi stok** (`/mutasi-stok`): buku besar semua pergerakan stok dengan filter barang, jenis, dan rentang tanggal (bawaan 30 hari), paginasi 50 baris, tautan ke dokumen asal (PO/produksi/pesanan). Kalau satu barang dipilih, muncul **grafik riwayat stok** (garis tangga) dengan garis ROP/stok minimum.
+- Tombol **Riwayat stok** di halaman detail bahan baku dan produk.
+- Migrasi `0005_ringkasan_mutasi.sql`: fungsi `mutasi_harian(p_hari)` untuk grafik.
+- Komponen `components/grafik.tsx` (SVG) + `lib/grafik.ts` (skala sumbu, unit-tested). Alat bantu dev `scripts/kueri.mjs`.
+- `docs/dashboard.md`.
+
+### Keputusan teknis
+1. **Grafik SVG buatan sendiri, bukan Recharts.** Rencana awal memakai Recharts, tetapi hanya dua jenis grafik sederhana yang dibutuhkan. SVG di Server Component = 0 KB JavaScript tambahan, tampil langsung tanpa menunggu hidrasi, dan tooltip cukup dengan `<title>` bawaan browser. Konsekuensinya, tooltip lebih sederhana (tanpa animasi).
+2. **Agregasi harian di database** (`mutasi_harian`), bukan di aplikasi. 30 hari bisa berisi >1.000 mutasi, padahal PostgREST memotong di 1.000 baris; agregasi di Postgres hanya mengirim 30 baris. Fungsinya `SECURITY INVOKER` (hanya membaca), jadi RLS tetap berlaku.
+3. **Nilai bahan dalam rupiah.** Bahan punya satuan berbeda (kg, liter, butir), jadi tidak bisa dijumlah langsung. Nilai = qty × harga satuan *saat ini* (perkiraan; harga historis tidak disimpan per mutasi).
+4. **Saldo awal & stok opname tidak dihitung sebagai arus** di grafik dashboard, karena bukan barang yang benar-benar masuk/keluar. Keduanya tetap tampil di halaman Mutasi stok.
+5. **Grafik riwayat stok berbentuk tangga**, karena stok berubah per kejadian, bukan bergerak mulus. Titik awal diambil dari mutasi terakhir sebelum rentang, supaya garis dimulai dari stok yang benar.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| `tsc`: *Type instantiation is excessively deep* | Fungsi filter generik menerima tipe query builder Supabase yang sangat dalam | Tipe dipersempit ke 3 metode yang dipakai (`eq`, `gte`, `lt`) |
+| `?hal=99` → halaman error "PGRST103 Requested range not satisfiable" | Nomor halaman melebihi jumlah data, misalnya setelah filter dipersempit saat sedang di halaman 5. **Bug lama yang juga ada di daftar PO, produksi, dan pesanan** | Helper `kembaliKeHalaman1()` di `galat-db.ts`: arahkan ke halaman 1 dengan filter yang sama. Dipasang di keempat halaman daftar |
+| Dashboard di ponsel melebar ke 698 px (perlu geser ke samping) | Kartu tabel ada di dalam `grid`; item grid punya `min-width: auto` sehingga tidak bisa lebih sempit dari isi tabelnya, walau tabel dibungkus `overflow-x-auto` | `[&>*]:min-w-0` pada grid (dashboard & detail produk) |
+| Tabel kecil dashboard tergulung ke samping di desktop | `.tabel` punya `min-w-[640px]` (cocok untuk halaman daftar, terlalu lebar untuk kartu setengah layar) | `tabel min-w-0` khusus di dashboard |
+| Tanggal "dari" > "sampai" | Isian pengguna | Ditukar otomatis |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 36/36** (+5 untuk skala grafik). **Tes DB 20/20**: tes baru memastikan total grafik 30 hari = buku besar.
+- **Uji browser** (1400×1000 dan ponsel 375 px):
+  1. Dashboard: 10/16 bahan kritis (8 belum ada PO), 3/8 produk kritis, PO 1 draft · 2 dikirim · **2 terlambat**, pesanan 5 diproses (2 siap) · 3 dikirim. Grafik 30 hari: diproduksi 3.720 pak vs dikirim 3.733 pak; bahan diterima Rp 66,2 jt vs terpakai Rp 69,4 jt.
+  2. Mutasi stok tanpa filter: 1.624 mutasi dalam 30 hari, 33 halaman.
+  3. Filter Siomay: grafik tangga + garis stok minimum; stok akhir di grafik (42) = stok di master ✔. Filter "Terima PO" 20–23 Nov: tepat 2 baris (PO-261121-0796, uji M4) ✔.
+  4. `?hal=99` dengan tanggal terbalik → diarahkan ke halaman 1, tanggal ditukar ✔. PO `?status=draft&hal=50` → halaman 1 ✔.
+  5. Ponsel: lebar dokumen = 375 px di dashboard, mutasi stok, dan detail produk (tidak ada geser samping) ✔.
+- Screenshot: `m7-dashboard-atas.jpg`, `m7-dashboard-bawah.jpg`, `m7-mutasi-stok.jpg` (footer email ditutup).
+
+### Campur tangan pemilik
+- Memberi izin push M6 ke GitHub.

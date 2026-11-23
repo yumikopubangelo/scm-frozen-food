@@ -1,6 +1,8 @@
 // Menerjemahkan error dari Supabase/Postgres menjadi kalimat yang dimengerti admin.
 // Kode error Postgres: https://www.postgresql.org/docs/current/errcodes-appendix.html
 
+import { redirect } from "next/navigation";
+
 type GalatSupabase = { code?: string; message: string; details?: string | null };
 
 const NAMA_TABEL: Record<string, string> = {
@@ -45,4 +47,15 @@ export function pesanGalat(e: GalatSupabase): string {
     default:
       return `Terjadi kesalahan database: ${e.message}`;
   }
+}
+
+/**
+ * Nomor halaman di URL melebihi jumlah data (mis. ?hal=99, atau filter dipersempit
+ * saat sedang di halaman 5): PostgREST menolak dengan PGRST103 "Requested range not
+ * satisfiable". Itu bukan gangguan, jadi arahkan ke halaman 1 dengan filter yang sama.
+ */
+export function kembaliKeHalaman1(e: GalatSupabase | null | undefined, basePath: string, params: Record<string, string>) {
+  if (e?.code !== "PGRST103") return;
+  const qs = new URLSearchParams(Object.entries(params).filter(([k, v]) => v && k !== "hal")).toString();
+  redirect(qs ? `${basePath}?${qs}` : basePath);
 }

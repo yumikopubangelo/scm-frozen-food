@@ -25,7 +25,7 @@ begin
          'catat_produksi',
          'buat_pesanan', 'kirim_pesanan', 'terima_pesanan', 'batalkan_pesanan',
          'sesuaikan_stok', '_jaga_item_po', '_jaga_item_pesanan',
-         'simpan_hasil_agen'
+         'simpan_hasil_agen', 'mutasi_harian'
        ])
   loop
     execute format('drop function %s cascade', f.sig);

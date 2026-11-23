@@ -163,5 +163,22 @@ begin
                (select count(*) from public.mutasi_stok);
 end $$;
 
+-- ---------- 6. Ringkasan grafik dashboard (M7) ----------
+-- mutasi_harian() harus cocok dengan buku besar: total pak keluar 30 hari
+-- = total mutasi "pesanan" produk sejak awal hari ke-30 (WIB), dan selalu 30 baris.
+do $$
+declare
+  v_grafik numeric;
+  v_buku   numeric;
+begin
+  assert (select count(*) from public.mutasi_harian(30)) = 30, 'grafik harus berisi tepat 30 hari';
+  select sum(produk_keluar) into v_grafik from public.mutasi_harian(30);
+  select coalesce(sum(-qty), 0) into v_buku from public.mutasi_stok
+   where produk_id is not null and sumber = 'pesanan'
+     and waktu >= ((public.hari_ini() - 29) at time zone 'Asia/Jakarta');
+  assert v_grafik = v_buku, format('grafik %s pak, buku besar %s pak', v_grafik, v_buku);
+  raise notice 'LULUS: ringkasan grafik 30 hari = buku besar (% pak dikirim)', v_grafik;
+end $$;
+
 reset role;
 rollback;

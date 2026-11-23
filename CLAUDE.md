@@ -37,7 +37,8 @@ src/
   app/
     login/             # halaman login + Server Action login/logout (di luar group, tanpa sidebar)
     (app)/             # route group: SEMUA halaman yang wajib login; layout.tsx = cek login + sidebar
-      page.tsx         # dashboard
+      page.tsx         # dashboard: kartu, grafik 30 hari (rpc mutasi_harian), stok kritis, PO & pesanan berjalan
+      mutasi-stok/     # buku besar mutasi + filter barang/jenis/tanggal + grafik riwayat stok 1 barang
       supplier/        # pola CRUD (sama untuk reseller, bahan-baku, produk):
         page.tsx       #   daftar + cari ?q= + banner ?ok=
         baru/page.tsx  #   form tambah (kode otomatis)
@@ -59,11 +60,13 @@ src/
     catatan.tsx        # CatatanDokumen: form catatan PO/pesanan
     tombol-aksi.tsx    # tombol + konfirmasi untuk Server Action status (kirim/terima/batal)
     paginasi.tsx       # Paginasi (.range + count) & TabStatus
+    grafik.tsx         # GrafikBatang & GrafikStok: SVG murni di Server Component (tanpa pustaka grafik)
   lib/
     auth.ts            # wajibLogin(): verifikasi sesi di server (getClaims)
     supabase/          # server.ts (klien per request), proxy.ts (updateSession)
     validasi.ts        # skema zod: teksWajib, angkaWajib (koma desimal), bacaForm -> StatusForm
-    galat-db.ts        # kode error Postgres -> kalimat Indonesia
+    galat-db.ts        # kode error Postgres -> kalimat Indonesia; kembaliKeHalaman1() untuk ?hal= kelewat
+    grafik.ts          # skalaRapi() sumbu Y, angkaRingkas() (rb/jt)
     format.ts          # rupiah(), angka(), tanggal(), hariIni() WIB, tambahHari(), nomorWa(), kodeBerikutnya()
     cari.ts            # filterCari() aman untuk PostgREST .or()
     hitung-produk.ts   # biaya bahan/pak, kapasitas, kebutuhanProduksi; bagiBulatBawah (tahan galat float)
@@ -74,7 +77,7 @@ src/
 supabase/
   migrations/          # SQL skema + fungsi stok, diberi nomor urut (0001_..., 0002_...)
   seed.sql             # data contoh (frozen food Tasikmalaya)
-scripts/               # skrip lokal: jalankan migrasi, tes skenario SQL
+scripts/               # skrip lokal: jalankan migrasi, tes skenario SQL, kueri.mjs (SELECT cepat ke DB)
 docs/                  # penjelasan logika (alur stok, rumus agen) + screenshots/ untuk laporan
 PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 ```
@@ -90,6 +93,9 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 - **Keamanan:** RLS menyala di semua tabel; hanya pengguna `authenticated` yang boleh baca/tulis. Jangan pernah commit secret — pakai `.env.local` (lokal) dan Environment Variables Vercel (produksi). `DATABASE_URL` hanya untuk skrip lokal.
 - **Format angka/tanggal:** `Intl` dengan locale `id-ID` (Rp, tanggal Indonesia). Input angka menerima koma desimal; `Field` menampilkan angka dengan koma.
 - **Perubahan status dokumen** selalu `supabase.rpc(...)` lalu `redirect(...?ok=<aksi>)` supaya banner sesuai. Form dengan baris dinamis (state React) pakai `onSubmit` + `startTransition`, BUKAN `action=`, agar React 19 tidak mereset form.
+- **Halaman daftar berpaginasi** panggil `kembaliKeHalaman1(error, basePath, params)` sebelum melempar error, supaya `?hal=` yang kelewat (PGRST103) diarahkan ke halaman 1.
+- **Grid berisi tabel/grafik** (`grid lg:grid-cols-2`) beri `[&>*]:min-w-0`, kalau tidak item grid melebar mengikuti isi tabel dan halaman bisa digeser ke samping di ponsel.
+- **Grafik**: pakai `components/grafik.tsx` (SVG). Data harian yang bisa >1.000 baris diagregasi di Postgres (fungsi), bukan di aplikasi.
 - **Halaman detail** wajib `cekGalatMuat(error...)` sebelum `notFound()` — gangguan Supabase harus tampil sebagai error, bukan 404.
 - **Pembagian stok** (kapasitas, ⌊a/b⌋) pakai `bagiBulatBawah()`, jangan `Math.floor(a/b)` (0,3/0,1 = 2,999…).
 - **Screenshot laporan**: kalau sidebar terlihat, crop di atas footer (email admin) atau tutup area itu sebelum di-commit.
@@ -112,7 +118,8 @@ npx next typegen             # kalau PageProps<"/rute/baru"> error: buat ulang t
 # database (butuh DATABASE_URL = Session pooler di .env.local)
 npm run db:migrate           # pasang migrasi yang belum terpasang
 npm run db:seed              # data contoh + simulasi 12 bulan (~1,5 menit)
-npm run db:test              # 19 tes skenario stok (di-rollback)
+npm run db:test              # 20 tes skenario stok (di-rollback)
+node scripts/kueri.mjs "select ..."   # lihat hasil kueri sebagai tabel
 npm run db:reset -- --ya     # HAPUS semua objek aplikasi (dev saja)
 ```
 
@@ -134,7 +141,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M4 | Purchase Order | selesai |
 | M5 | Produksi | selesai |
 | M6 | Pesanan & pengiriman | selesai |
-| M7 | Dashboard | belum |
+| M7 | Dashboard | selesai |
 | M8 | Agen restock (+ M8b S4 opsional) | belum |
 | M9 | Deploy GitHub + Vercel | belum |
 | M10 | Ringkasan akhir | belum |

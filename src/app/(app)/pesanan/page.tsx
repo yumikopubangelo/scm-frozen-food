@@ -4,6 +4,7 @@ import { JudulHalaman } from "@/components/judul-halaman";
 import { Paginasi, TabStatus } from "@/components/paginasi";
 import { Badge, BadgeStatus, BannerOk, Tabel, TabelKosong, TombolTambah } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
+import { kembaliKeHalaman1 } from "@/lib/galat-db";
 import { paramTeks } from "@/lib/cari";
 import { rupiah, tanggal } from "@/lib/format";
 import { STATUS_PESANAN, type StatusPesanan } from "@/lib/status";
@@ -60,6 +61,7 @@ export default async function PesananPage({ searchParams }: PageProps<"/pesanan"
     hitung("diterima"),
     hitung("dibatalkan"),
   ]);
+  kembaliKeHalaman1(error, "/pesanan", { status, reseller: resellerId, q });
   if (error) throw new Error(error.message);
   const daftar = (data ?? []) as unknown as Baris[];
   const params = { status, reseller: resellerId, q };

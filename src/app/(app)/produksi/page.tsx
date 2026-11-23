@@ -4,6 +4,7 @@ import { JudulHalaman } from "@/components/judul-halaman";
 import { Paginasi } from "@/components/paginasi";
 import { BannerOk, Tabel, TabelKosong, TombolTambah } from "@/components/ui";
 import { createClient } from "@/lib/supabase/server";
+import { kembaliKeHalaman1 } from "@/lib/galat-db";
 import { paramTeks } from "@/lib/cari";
 import { angka, hariIni, tambahHari, tanggal } from "@/lib/format";
 
@@ -33,6 +34,7 @@ export default async function ProduksiPage({ searchParams }: PageProps<"/produks
     supabase.from("produk").select("id, nama, satuan").order("kode"),
     supabase.from("produksi").select("produk_id, qty").gte("tanggal", dari30),
   ]);
+  kembaliKeHalaman1(error, "/produksi", { produk: produkId });
   if (error) throw new Error(error.message);
   const daftar = (data ?? []) as unknown as Baris[];
 
