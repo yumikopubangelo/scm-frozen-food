@@ -149,4 +149,4 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M7 | Dashboard | selesai |
 | M8 | Agen restock (+ M8b S4 opsional) | selesai (M8b belum) |
 | M9 | Deploy GitHub + Vercel | selesai |
-| M10 | Ringkasan akhir | belum |
+| M10 | Ringkasan akhir | selesai |

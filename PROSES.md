@@ -481,3 +481,96 @@ Tidak ada.
 - Mengirim link deploy.
 - Login admin di panel browser untuk pengujian produksi.
 - Memberi izin push M8.
+
+---
+
+## M10 — Ringkasan akhir (24 Nov 2026)
+
+### Hasil
+
+**Aplikasi: https://scm-frozen-food.vercel.app** · Kode: https://github.com/yumikopubangelo/scm-frozen-food
+
+Ke-8 fitur MVP selesai dan diuji: login admin, master data, BOM, Purchase Order, produksi, pesanan & pengiriman, dashboard, dan agen restock. Ada tambahan yang tidak diminta, tetapi muncul dari kebutuhan:
+- buku besar mutasi stok dengan grafik riwayat per barang;
+- stok opname;
+- pesan WhatsApp ke supplier/reseller (tidak terkirim otomatis);
+- tanda "siap kirim";
+- PO terlambat;
+- pratinjau kebutuhan bahan saat produksi.
+
+| Ukuran | Nilai |
+|---|---|
+| Waktu kalender | 20 Nov 18.50 → 24 Nov 00.27 WIB (±3,5 hari, dengan jeda 21–23 Nov) |
+| Commit milestone | 10 (M0–M9) + commit M10 ini |
+| Kode aplikasi | ±6.800 baris TypeScript/TSX · ±1.500 baris SQL (6 migrasi, seed, tes) |
+| Halaman | 25 rute (semua wajib login kecuali `/login`) |
+| Tes otomatis | **47 unit test** (6 berkas Vitest) · **23 tes skenario database** (di-rollback) |
+| Uji manual | Setiap milestone diuji ujung-ke-ujung di browser (desktop + ponsel 375 px), ditambah uji produksi di M9 |
+| Konsistensi data | Stok setiap barang = jumlah riwayat mutasinya (diperiksa di tes DB; ±21.700 baris) |
+| Dokumentasi | `PROSES.md`, `CLAUDE.md`, 8 penjelasan di `docs/`, 31 screenshot (email admin selalu ditutup) |
+
+### Kelebihan agent (yang terbukti di proses ini)
+
+1. **Merencanakan dulu, lalu disiplin per milestone.** Skema, halaman, dan urutan kerja disetujui sebelum menulis kode. Setiap milestone ditutup dengan tes, catatan, lalu commit, sehingga ada 10 titik aman untuk kembali.
+2. **Keamanan dirancang dari bawah, bukan ditempel belakangan.**
+   - RLS + GRANT eksplisit: role `authenticated` bahkan tidak bisa meng-UPDATE kolom stok.
+   - Stok hanya berubah lewat fungsi database yang atomik.
+   - Riwayat dilindungi FK RESTRICT.
+   - Agen hanya bisa membuat *draft*.
+   - Tidak ada secret di repo; seluruh riwayat git dipindai sebelum deploy.
+3. **Menguji lebih dari "halaman terbuka".** Tes skenario SQL menguji aturan bisnis langsung di database (pengiriman ditolak bila stok kurang, anon ditolak, klik ganda agen ditolak). Uji browser mencakup jalur gagal, bukan hanya jalur sukses.
+4. **Menemukan bug sendiri dan memperbaiki akarnya, bukan gejalanya.** Contohnya:
+   - Galat float kapasitas produksi (526 kasus ditemukan lewat pemindaian).
+   - Halaman 404 palsu saat Supabase gangguan.
+   - Error halaman melebihi jumlah data (bug lama M4–M6 yang ketahuan di M7).
+   - Halaman melebar di ponsel.
+
+   Setiap perbaikan diterapkan ke **semua** halaman yang terkena, lalu ditulis sebagai aturan di `CLAUDE.md`.
+5. **Diagnosis berbasis bukti.** Saat Supabase gangguan (HTTP 555), agent membuktikan lewat header respons bahwa masalahnya ada di gateway Supabase, bukan jaringan lokal atau kode. Saat berkas M5 tampak hilang, agent membaca `git reflog` alih-alih menulis ulang.
+6. **Menghormati batas.**
+   - Berhenti setiap kali butuh akun (Supabase, Vercel) dan memberi langkahnya.
+   - Tidak mengetik password asli.
+   - Tidak menebak URL deploy.
+   - Push hanya bila diminta, per kali.
+   - Tidak mengklik ulang tombol simpan yang tampak lambat (risiko data dobel) tetapi mengecek database.
+7. **Dokumentasi untuk manusia dan agent berikutnya.**
+   - Setiap fitur punya penjelasan rumus, jebakan, dan "kalau mau mengubah X, sentuh berkas mana".
+   - `CLAUDE.md` membuat agent anggota kelompok lain bisa langsung melanjutkan.
+
+### Kekurangan agent (jujur)
+
+1. **Salah sendiri, beberapa kali.** Semuanya tertangkap sebelum sampai ke pengguna, tetapi tetap memakan waktu:
+   - Sempat salah melaporkan isi `.env.local` (placeholder ternyata ada di baris komentar).
+   - Contoh unit test pertama untuk bug float justru bukan kasus bermasalah.
+   - Satu perintah `perl` merusak tautan menjadi `/PLACEHOLDER`.
+   - Perintah `python3 -` menggantung menunggu input.
+   - Tes DB agen sempat salah memahami `now()` vs `clock_timestamp()`.
+   - Di M10, satu perintah shell gagal karena tanda kutip; tidak ada berkas yang berubah.
+2. **Data contoh butuh beberapa putaran.** Seed simulasi 12 bulan punya beberapa bug (alias bentrok, pembulatan ganda, tidak ada PO "dikirim" di akhir). Resep Bakso awalnya membuat margin **−8%**; itu baru ketahuan saat fitur HPP dibuat di M3.
+3. **Celah uji yang terlambat ditemukan.** Bug `?hal=` melebihi jumlah halaman lolos dari uji M4–M6 dan baru tertangkap di M7. Halaman melebar di ponsel juga baru terlihat saat dashboard dibuat. Pelajarannya: uji tepi (nomor halaman ekstrem, layar sempit) seharusnya masuk daftar uji standar sejak awal.
+4. **Kebiasaan alat browser yang tidak terduga.**
+   - Form tidak bereaksi di tab latar karena hidrasi React ditunda.
+   - Tombol submit pertama di halaman ternyata "Keluar" dan hampir terklik.
+   - Satu screenshot memuat email admin; ditutup sebelum commit.
+
+   Ketiganya kini jadi aturan di `CLAUDE.md`, tetapi masing-masing sempat menghabiskan waktu diagnosis.
+5. **Bergantung pada manusia untuk semua hal yang melibatkan identitas.** Membuat project Supabase, akun admin, menghubungkan Vercel, dan login di produksi harus dilakukan pemilik. Ini disengaja demi keamanan, tetapi berarti agent tidak bisa menyelesaikan proyek sendirian.
+6. **Ingatan percakapan terbatas.** Percakapan yang panjang diringkas otomatis di tengah jalan. Kelanjutan kerja bertumpu pada `CLAUDE.md`, `PROSES.md`, dan memori proyek. Tanpa ketiganya, detail seperti "tab latar menunda hidrasi" akan terlupa dan diulang.
+7. **Keputusan domain tetap butuh manusia.** Agent menebak "bordir" sebagai salah ketik dan bertanya dulu. Asumsi bisnis lain (resep, harga, lead time, musim Lebaran di seed) masuk akal, tetapi tidak divalidasi pelaku UMKM sungguhan.
+
+### Peran pemilik proyek (ringkasan campur tangan)
+
+| Tahap | Campur tangan |
+|---|---|
+| 0 | Menyetujui rencana & stack; mengoreksi studi kasus (frozen food); memutuskan S4 opsional |
+| M1 | Membuat project Supabase, mengisi `.env.local` |
+| M2 | Membuat akun admin, mematikan pendaftaran publik, login di panel browser |
+| M5 | Membuat repo GitHub & push (lebih awal dari rencana); login ulang setelah sesi kedaluwarsa |
+| M5–M9 | Memberi izin push per milestone |
+| M9 | Login Vercel, impor repo, isi 2 env variable, deploy, kirim link, login admin di produksi |
+
+### Yang belum dikerjakan / pengembangan lanjutan
+- **M8b (opsional):** impor ramalan S4. Pintunya sudah ada (`rata_permintaan_harian` otomatis memakai baris `forecast_permintaan` bersumber `s4`). Syarat pakai tetap: MAE ≥10% lebih baik dari rata-rata bergerak.
+- Retur pesanan setelah dikirim, alokasi stok antarpesanan, beberapa supplier per bahan, harga historis per mutasi.
+- Peran pengguna (gudang/produksi/owner) dan project Supabase terpisah untuk pengembangan. Saat ini lokal & produksi memakai database yang sama.
+- Proyek Supabase gratis dijeda setelah 7 hari tidak aktif, jadi buka aplikasi sekali menjelang presentasi.
