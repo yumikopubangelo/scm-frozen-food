@@ -315,3 +315,44 @@ Tidak ada.
 ### Campur tangan pemilik
 - Membuat repo GitHub dan push. Ini lebih awal dari rencana M9 dan dilakukan sendiri oleh pemilik.
 - Login ulang di panel browser setelah sesi kedaluwarsa.
+
+---
+
+## M6 — Pesanan reseller & pengiriman (23 Nov 2026)
+
+### Yang dikerjakan
+- **Daftar pesanan**: tab status dengan jumlah, filter nomor & reseller, paginasi (±1.700 pesanan), dan tanda **"Siap kirim" / "Stok kurang"** untuk pesanan yang masih diproses.
+- **Form pesanan baru**: pilih reseller, lalu baris produk dinamis. Harga terisi dari harga jual dan stok ditampilkan. Memesan melebihi stok diperbolehkan dengan peringatan, karena pesanan adalah permintaan; yang dicegah adalah mengirim tanpa stok.
+- **Detail pesanan**: linimasa (masuk → dikirim → diterima), **Kirim (stok berkurang)**, **Konfirmasi diterima**, **Batalkan** (hanya sebelum dikirim), edit isi selama diproses, peringatan "Belum bisa dikirim" + tautan *Catat produksi*, daftar "Keluar dari gudang barang jadi", catatan, dan **pesan WhatsApp ke reseller** yang isinya mengikuti status.
+- Halaman reseller: tombol **Catat pesanan** dan **Riwayat pesanan**.
+- Form catatan dipindah menjadi komponen bersama `CatatanDokumen` (dipakai PO & pesanan).
+- `docs/pesanan.md`.
+
+### Keputusan teknis
+1. **Stok produk berkurang saat dikirim.** Pesanan diproses = kebutuhan, yang dipakai agen restock di M8.
+2. **"Siap kirim" diperiksa per pesanan, bukan alokasi gabungan.** Lebih sederhana dan cukup untuk UMKM. Keterbatasannya ditulis di docs.
+3. **Tombol "Kirim" sengaja tidak dinonaktifkan** walau stok kurang. Tampilan bisa basi; database tetap penjaga terakhir dan pesannya jelas. Ini berbeda dengan form produksi (M5), yang menonaktifkan tombol karena pratinjaunya dihitung saat itu juga.
+4. **Batal hanya sebelum dikirim.** Retur adalah alur lain (di luar MVP).
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| Form di tab uji agent tidak bereaksi (harga tidak terisi) | Agent menguji di **tab latar**. Chrome menunda hidrasi React, dan konten di dalam batas `loading.tsx` dihidrasi belakangan. Diagnosis: elemen form tidak punya properti `__reactFiber…`, sidebar punya; tidak ada error di konsol/log | Tab uji ditampilkan (front) selama pengujian form. Agent kini menunggu hidrasi sebelum berinteraksi. Bukan bug aplikasi |
+| Screenshot memuat email admin | Diambil penuh, sehingga footer sidebar ikut | Area footer ditutup dengan Pillow sebelum commit. Aturan ditambahkan ke `CLAUDE.md` |
+| `python -c` multi-baris gagal | Perintah `python` di komputer ini berupa skrip pembungkus Windows | Pakai berkas skrip (`.py`) |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 31/31. Tes DB 19/19**; buku besar **21.729 = 21.727 + 2** (Cireng & Bakso keluar) ✔.
+- **Uji siklus penuh di browser**:
+  1. Daftar: Diproses 5 (2 "Siap kirim", 3 "Stok kurang" karena telur habis), Dikirim 3, Diterima 1.691; 68 halaman.
+  2. Pesanan baru tanpa reseller → "Pilih reseller"; baris Cireng 10 & Bakso 5 tetap utuh; total Rp 375.000 ✔.
+  3. Reseller **Warung Bu Yati Cipedes** → **PSN-261123-1712** (diproses). WA: nomor `62852…`, isi "sedang disiapkan" + daftar produk ✔ (tidak dibuka/dikirim).
+  4. Edit Bakso 5 → 6: total Rp 420.000 ✔.
+  5. **Kirim** → **Cireng 104 → 94, Bakso 64 → 58**; isi terkunci; banner "Pesanan dikirim…" ✔.
+  6. **Konfirmasi diterima** → status Diterima, tidak ada aksi tersisa ✔.
+  7. Pesanan seed **PSN-261120-1697** (Lumpia 2 pak, stok 0): halaman menampilkan "Belum bisa dikirim"; klik Kirim → **ditolak database**: "Stok produk tidak cukup untuk dikirim: Lumpia Udang isi 8 (pesan 2, stok 0)"; status tetap diproses ✔.
+- Data yang berubah karena uji: 1 pesanan baru diterima (stok Cireng & Bakso berkurang, tercatat di mutasi). Pesanan seed tidak diubah.
+- Screenshot: `m6-pesanan-daftar.png`, `m6-pesanan-baru-validasi.jpg`, `m6-pesanan-dikirim.png`.
+
+### Campur tangan pemilik
+- Memberi izin push M5 ke GitHub.

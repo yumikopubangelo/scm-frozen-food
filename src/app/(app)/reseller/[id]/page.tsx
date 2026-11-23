@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { JudulHalaman } from "@/components/judul-halaman";
@@ -39,7 +40,17 @@ export default async function ResellerDetailPage({ params }: PageProps<"/reselle
       <JudulHalaman
         judul={r.nama}
         deskripsi={`Kode ${r.kode} · ${daftarPesanan.length} pesanan · total ${rupiah(totalNilai)}`}
-        aksi={<TombolHapus aksi={hapusReseller.bind(null, id)} nama={`reseller ${r.nama}`} />}
+        aksi={
+          <>
+            <Link href={`/pesanan/baru?reseller=${id}`} className="btn-primary">
+              Catat pesanan
+            </Link>
+            <Link href={`/pesanan?reseller=${id}`} className="btn-secondary">
+              Riwayat pesanan
+            </Link>
+            <TombolHapus aksi={hapusReseller.bind(null, id)} nama={`reseller ${r.nama}`} />
+          </>
+        }
       />
       <FormReseller aksi={simpanReseller.bind(null, id)} awal={r} daftarKota={daftarKota} />
     </div>

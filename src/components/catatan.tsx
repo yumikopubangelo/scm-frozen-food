@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { Field, PesanForm, TombolSimpan } from "@/components/form";
 import { statusAwal, type StatusForm } from "@/lib/validasi";
 
-export function CatatanPo({ aksi, awal }: { aksi: (p: StatusForm, fd: FormData) => Promise<StatusForm>; awal: string | null }) {
+export function CatatanDokumen({ aksi, awal }: { aksi: (p: StatusForm, fd: FormData) => Promise<StatusForm>; awal: string | null }) {
   const [status, formAction] = useActionState(aksi, statusAwal);
   return (
     <form action={formAction} className="flex flex-col gap-2">

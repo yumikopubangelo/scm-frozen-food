@@ -46,6 +46,7 @@ src/
         actions.ts     #   Server Action simpan (id null = tambah) & hapus
       produk/editor-bom.tsx  # editor resep (BOM) per produk
       produksi/        # daftar (ringkasan 30 hari + paginasi), baru (pratinjau kebutuhan bahan), [id] (bahan keluar, perkiraan biaya)
+      pesanan/         # daftar (tab status, siap kirim/stok kurang), baru (baris dinamis), [id] (kirim/terima/batal, edit saat diproses, WA reseller)
       purchase-order/  # daftar (tab status + paginasi), baru (baris dinamis -> JSON), [id] (linimasa, aksi status, edit item saat draft, WA)
   components/
     navigasi.ts        # daftar menu sidebar (satu-satunya sumber)
@@ -55,6 +56,7 @@ src/
     ui.tsx             # Tabel, Badge, BadgeStok, Pencarian, BannerOk, TombolTambah, Kembali
     tombol-hapus.tsx   # hapus + konfirmasi + tampilkan pesan error FK
     stok-opname.tsx    # form stok opname (rpc sesuaikan_stok)
+    catatan.tsx        # CatatanDokumen: form catatan PO/pesanan
     tombol-aksi.tsx    # tombol + konfirmasi untuk Server Action status (kirim/terima/batal)
     paginasi.tsx       # Paginasi (.range + count) & TabStatus
   lib/
@@ -90,6 +92,8 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 - **Perubahan status dokumen** selalu `supabase.rpc(...)` lalu `redirect(...?ok=<aksi>)` supaya banner sesuai. Form dengan baris dinamis (state React) pakai `onSubmit` + `startTransition`, BUKAN `action=`, agar React 19 tidak mereset form.
 - **Halaman detail** wajib `cekGalatMuat(error...)` sebelum `notFound()` — gangguan Supabase harus tampil sebagai error, bukan 404.
 - **Pembagian stok** (kapasitas, ⌊a/b⌋) pakai `bagiBulatBawah()`, jangan `Math.floor(a/b)` (0,3/0,1 = 2,999…).
+- **Screenshot laporan**: kalau sidebar terlihat, crop di atas footer (email admin) atau tutup area itu sebelum di-commit.
+- **Uji di browser**: pakai tab sendiri, tapi tampilkan (front) tab itu saat menguji form — tab latar bisa menunda hidrasi React.
 - **Form:** validasi di server dengan zod (`lib/validasi.ts`), kembalikan `StatusForm` (galat per kolom + isian terakhir). Error Supabase selalu lewat `pesanGalat()`. Data yang punya riwayat transaksi tidak bisa dihapus (FK RESTRICT) — itu disengaja.
 - **Setiap milestone:** tes (build + lint + skenario), perbarui `PROSES.md`, lalu commit `M<n>: <ringkasan>`.
 
@@ -129,7 +133,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M3 | Master data + BOM | selesai |
 | M4 | Purchase Order | selesai |
 | M5 | Produksi | selesai |
-| M6 | Pesanan & pengiriman | belum |
+| M6 | Pesanan & pengiriman | selesai |
 | M7 | Dashboard | belum |
 | M8 | Agen restock (+ M8b S4 opsional) | belum |
 | M9 | Deploy GitHub + Vercel | belum |
