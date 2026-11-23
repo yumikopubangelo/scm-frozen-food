@@ -400,3 +400,44 @@ Tidak ada.
 
 ### Campur tangan pemilik
 - Memberi izin push M6 ke GitHub.
+
+## M8 — Agen restock (24 Nov 2026)
+
+### Yang dikerjakan
+- **Otak agen** `lib/agen-restock.ts`: fungsi murni `hitungRencana()`. Untuk tiap bahan menghitung kebutuhan dari pesanan reseller yang kekurangan stok (diturunkan lewat BOM) dan dari ramalan selama lead time, lalu mengambil yang terbesar. Bahan dipesan bila proyeksi < reorder point. Qty dibulatkan per satuan (lembar/100, pcs/50), dikelompokkan **satu draft PO per supplier**, dan setiap baris diberi **alasan tertulis**. 11 unit test.
+- **Migrasi `0006_agen_restock.sql`**:
+  - `rata_permintaan_harian(28)`: rata-rata bergerak 28 hari penuh, otomatis memakai ramalan S4 kalau ada (pintu untuk M8b).
+  - `simpan_hasil_agen()`: membuat semua draft PO + `agen_log` dalam satu transaksi, dengan kunci anti klik ganda.
+- **Halaman `/agen-restock`**:
+  - Empat langkah cara kerja agen (amati, hitung, usulkan, admin menyetujui).
+  - Ringkasan data yang diamati, termasuk barang jadi yang kurang untuk pesanan.
+  - Usulan per supplier dengan tabel stok/ROP, sedang dipesan, kebutuhan (dari pesanan/ramalan), proyeksi, usulan + biaya, dan alasan yang bisa dibuka.
+  - Tombol **"Buat N draft PO"**, banner hasil dengan tautan ke tiap draft, dan riwayat agen.
+- Draft PO dari agen memakai alur M4 yang sudah ada: label "dibuat agen restock" dan tombol "Setujui & kirim ke supplier".
+- `docs/agen-restock.md`.
+
+### Keputusan teknis
+1. **Berbasis aturan, tanpa LLM.** Keputusan pembelian harus bisa diaudit dan diulang. Setiap angka bisa ditelusuri ke rumus, dan alasannya ditulis per bahan. *Human-in-the-loop*: agen hanya membuat **draft**, pengiriman ke supplier tetap lewat tombol admin.
+2. **Kebutuhan = maks(pesanan, ramalan), bukan jumlah.** Pesanan yang sudah masuk adalah bagian dari permintaan yang diramalkan, jadi menjumlahkan keduanya berarti menghitung dua kali.
+3. **Logika di TypeScript murni, penyimpanan di Postgres.** Rumus mudah diuji unit dan dibaca; database menjamin atomisitas, kunci, dan hak akses (`agen_log` hanya bisa ditulis lewat fungsi).
+4. **Server menghitung ulang + "sidik" pratinjau.** Browser tidak mengirim jumlah apa pun, hanya sidik rencana yang dilihat admin. Kalau hasil hitung ulang berbeda, simpan ditolak, sehingga yang disimpan = persis yang dilihat.
+5. **Pintu S4 dibuat sekarang** (di `rata_permintaan_harian`), sehingga M8b cukup mengimpor baris `forecast_permintaan` tanpa mengubah kode agen.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| Tes DB "klik ganda tidak membuat PO kedua" gagal (menghitung 0) | Tesnya salah: `created_at` = `now()` = waktu **awal transaksi**, lebih awal dari `clock_timestamp()` yang dicatat tes | Hitung berdasarkan `id >= PO pertama`. Fungsi agen sendiri sengaja memakai `clock_timestamp()` untuk waktu log, karena alasan yang sama |
+| Konsol menampilkan error PGRST103 di halaman Mutasi stok | Sisa log dari uji `?hal=99` di M7 **sebelum** perbaikan; bukan error baru | Tidak perlu perubahan (dicek ulang) |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 47/47** (+11 agen). **Tes DB 23/23** (+3: agen hanya membuat draft bersumber agen + log; rencana basi/klik ganda ditolak dan tidak membuat PO kedua; `authenticated` tidak bisa menulis `agen_log` langsung).
+- **Uji di browser**:
+  1. Pratinjau: 10/16 bahan di bawah ROP; kekurangan Dimsum 10 pak & Lumpia 12 pak; usulan **9 bahan dari 6 supplier, Rp 2.512.000**. Udang kupas (sudah ada PO 7 kg) dan ikan tenggiri (PO 30 kg) **tidak** dipesan lagi ✔. Telur: 0/5 kg → 7 kg ✔ (sesuai hitungan manual di docs).
+  2. **Buat 6 draft PO** → PO-261124-0805…0810, semua *draft*, sumber *agen*, total di DB = pratinjau ✔. Halaman PO menampilkan label agen + "Setujui & kirim ke supplier" ✔.
+  3. Dijalankan lagi → "Tidak ada bahan yang perlu dipesan" (tidak dobel) ✔. Dashboard: "10/16 · semua sudah dipesan" ✔.
+  4. **Data berubah saat pratinjau terbuka**: draft Kios Bumbu dibatalkan sehingga agen mengusulkannya lagi, lalu dibuat PO manual daun bawang 1 kg saat pratinjau masih terbuka. Klik "Buat 1 draft PO" → **ditolak**: "Data stok/pesanan/PO berubah sejak pratinjau ditampilkan…" ✔. PO uji dibatalkan, halaman dimuat ulang, dijalankan → PO-261124-0816 ✔.
+- Data yang tertinggal untuk demo: **6 draft PO agen** (0805, 0807–0810, 0816) menunggu persetujuan; 0806 & 0815 (uji) dibatalkan.
+- Screenshot: `m8-agen-pratinjau.jpg`, `m8-agen-hasil.jpg`, `m8-draft-po-agen.jpg`.
+
+### Campur tangan pemilik
+- Memberi izin push M7 ke GitHub.

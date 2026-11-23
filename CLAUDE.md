@@ -38,6 +38,7 @@ src/
     login/             # halaman login + Server Action login/logout (di luar group, tanpa sidebar)
     (app)/             # route group: SEMUA halaman yang wajib login; layout.tsx = cek login + sidebar
       page.tsx         # dashboard: kartu, grafik 30 hari (rpc mutasi_harian), stok kritis, PO & pesanan berjalan
+      agen-restock/    # data.ts (AMATI: muatRencana), page.tsx (pratinjau usulan per supplier + riwayat), actions.ts (hitung ulang + sidik -> rpc simpan_hasil_agen)
       mutasi-stok/     # buku besar mutasi + filter barang/jenis/tanggal + grafik riwayat stok 1 barang
       supplier/        # pola CRUD (sama untuk reseller, bahan-baku, produk):
         page.tsx       #   daftar + cari ?q= + banner ?ok=
@@ -66,6 +67,7 @@ src/
     supabase/          # server.ts (klien per request), proxy.ts (updateSession)
     validasi.ts        # skema zod: teksWajib, angkaWajib (koma desimal), bacaForm -> StatusForm
     galat-db.ts        # kode error Postgres -> kalimat Indonesia; kembaliKeHalaman1() untuk ?hal= kelewat
+    agen-restock.ts    # OTAK agen: hitungRencana() (murni, diuji), kelipatanSatuan, sidikRencana
     grafik.ts          # skalaRapi() sumbu Y, angkaRingkas() (rb/jt)
     format.ts          # rupiah(), angka(), tanggal(), hariIni() WIB, tambahHari(), nomorWa(), kodeBerikutnya()
     cari.ts            # filterCari() aman untuk PostgREST .or()
@@ -95,6 +97,7 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 - **Perubahan status dokumen** selalu `supabase.rpc(...)` lalu `redirect(...?ok=<aksi>)` supaya banner sesuai. Form dengan baris dinamis (state React) pakai `onSubmit` + `startTransition`, BUKAN `action=`, agar React 19 tidak mereset form.
 - **Halaman daftar berpaginasi** panggil `kembaliKeHalaman1(error, basePath, params)` sebelum melempar error, supaya `?hal=` yang kelewat (PGRST103) diarahkan ke halaman 1.
 - **Grid berisi tabel/grafik** (`grid lg:grid-cols-2`) beri `[&>*]:min-w-0`, kalau tidak item grid melebar mengikuti isi tabel dan halaman bisa digeser ke samping di ponsel.
+- **Agen restock** hanya boleh membuat PO `draft` (sumber `agen`); jangan pernah menambah jalur yang mengirim PO ke supplier tanpa klik admin. Ubah rumus di `lib/agen-restock.ts` + test-nya; penjelasan di `docs/agen-restock.md`.
 - **Grafik**: pakai `components/grafik.tsx` (SVG). Data harian yang bisa >1.000 baris diagregasi di Postgres (fungsi), bukan di aplikasi.
 - **Halaman detail** wajib `cekGalatMuat(error...)` sebelum `notFound()` — gangguan Supabase harus tampil sebagai error, bukan 404.
 - **Pembagian stok** (kapasitas, ⌊a/b⌋) pakai `bagiBulatBawah()`, jangan `Math.floor(a/b)` (0,3/0,1 = 2,999…).
@@ -118,7 +121,7 @@ npx next typegen             # kalau PageProps<"/rute/baru"> error: buat ulang t
 # database (butuh DATABASE_URL = Session pooler di .env.local)
 npm run db:migrate           # pasang migrasi yang belum terpasang
 npm run db:seed              # data contoh + simulasi 12 bulan (~1,5 menit)
-npm run db:test              # 20 tes skenario stok (di-rollback)
+npm run db:test              # 23 tes skenario stok (di-rollback)
 node scripts/kueri.mjs "select ..."   # lihat hasil kueri sebagai tabel
 npm run db:reset -- --ya     # HAPUS semua objek aplikasi (dev saja)
 ```
@@ -142,6 +145,6 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M5 | Produksi | selesai |
 | M6 | Pesanan & pengiriman | selesai |
 | M7 | Dashboard | selesai |
-| M8 | Agen restock (+ M8b S4 opsional) | belum |
+| M8 | Agen restock (+ M8b S4 opsional) | selesai (M8b belum) |
 | M9 | Deploy GitHub + Vercel | belum |
 | M10 | Ringkasan akhir | belum |
