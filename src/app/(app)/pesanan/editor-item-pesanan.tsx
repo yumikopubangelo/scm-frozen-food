@@ -14,7 +14,7 @@ export type ItemPesanan = {
   produk: { id: number; nama: string; satuan: string; stok: number };
 };
 
-/** Edit item pesanan selama masih DIPROSES (belum keluar gudang). */
+/** Edit isi pesanan selama masih "diproses" (mis. reseller menambah/mengurangi). */
 export function EditorItemPesanan({
   pesananId,
   items,
@@ -33,7 +33,8 @@ export function EditorItemPesanan({
             <tr>
               <th>Produk</th>
               <th>Jumlah</th>
-              <th>Harga / satuan</th>
+              <th>Harga / pak</th>
+              <th className="text-right">Stok gudang</th>
               <th className="text-right">Subtotal</th>
               <th className="w-10" />
             </tr>
@@ -53,23 +54,15 @@ export function EditorItemPesanan({
 function BarisItem({ pesananId, item, bisaHapus }: { pesananId: number; item: ItemPesanan; bisaHapus: boolean }) {
   const [status, formAction] = useActionState(ubahItemPesanan.bind(null, item.id, pesananId), statusAwal);
   const formId = `item-${item.id}`;
-  const koma = (n: number) => String(n).replace(".", ",");
   const galat = status.galat?.qty ?? status.galat?.harga_satuan ?? status.pesan;
+  const kurang = Math.max(0, item.qty - item.produk.stok);
 
   return (
-    <tr>
+    <tr className={kurang > 0 ? "bg-red-50/60" : ""}>
       <td className="font-medium">{item.produk.nama}</td>
       <td>
         <div className="flex items-center gap-1.5">
-          <input
-            form={formId}
-            key={`q${status.versi ?? 0}`}
-            name="qty"
-            defaultValue={status.nilai?.qty ?? String(item.qty)}
-            inputMode="numeric"
-            className="input w-24"
-            aria-label={`Jumlah ${item.produk.nama}`}
-          />
+          <input form={formId} key={`q${status.versi ?? 0}`} name="qty" defaultValue={status.nilai?.qty ?? String(item.qty)} inputMode="numeric" className="input w-20" aria-label={`Jumlah ${item.produk.nama}`} />
           <span className="text-xs text-slate-500">{item.produk.satuan}</span>
         </div>
       </td>
@@ -85,6 +78,13 @@ function BarisItem({ pesananId, item, bisaHapus }: { pesananId: number; item: It
         />
       </td>
       <td className="whitespace-nowrap text-right tabular-nums">{rupiah(Number(item.qty) * Number(item.harga_satuan))}</td>
+        <input form={formId} key={`h${status.versi ?? 0}`} name="harga_satuan" defaultValue={status.nilai?.harga_satuan ?? String(item.harga_satuan)} inputMode="decimal" className="input w-28" aria-label={`Harga ${item.produk.nama}`} />
+      </td>
+      <td className={`whitespace-nowrap text-right tabular-nums ${kurang > 0 ? "font-medium text-red-700" : "text-slate-600"}`}>
+        {angka(item.produk.stok)}
+        {kurang > 0 && <span className="block text-xs">kurang {angka(kurang)}</span>}
+      </td>
+      <td className="whitespace-nowrap text-right tabular-nums">{rupiah(item.qty * Number(item.harga_satuan))}</td>
       <td>
         <div className="flex items-center gap-1">
           <form id={formId} action={formAction}>
@@ -99,32 +99,19 @@ function BarisItem({ pesananId, item, bisaHapus }: { pesananId: number; item: It
   );
 }
 
-function FormTambah({
-  pesananId,
-  tersedia,
-}: {
-  pesananId: number;
-  tersedia: { id: number; nama: string; satuan: string; stok: number }[];
-}) {
+function FormTambah({ pesananId, tersedia }: { pesananId: number; tersedia: { id: number; nama: string; satuan: string; stok: number }[] }) {
   const [status, formAction] = useActionState<StatusForm, FormData>(tambahItemPesanan.bind(null, pesananId), statusAwal);
   if (tersedia.length === 0) return null;
   return (
     <form action={formAction} className="rounded-lg border border-dashed border-slate-300 p-4" noValidate>
       <p className="mb-3 text-sm font-medium text-slate-700">Tambah produk ke pesanan</p>
-      <div className="grid gap-3 sm:grid-cols-[1fr_9rem_auto] sm:items-start">
-        <Pilihan
-          name="produk_id"
-          label="Produk"
-          status={status}
-          kosong="— pilih produk —"
-          opsi={tersedia.map((p) => ({ nilai: p.id, label: `${p.nama} (stok ${angka(p.stok)} ${p.satuan})` }))}
-        />
+      <div className="grid gap-3 sm:grid-cols-[1fr_8rem_auto] sm:items-start">
+        <Pilihan name="produk_id" label="Produk" status={status} kosong="— pilih produk —" opsi={tersedia.map((p) => ({ nilai: p.id, label: `${p.nama} (stok ${angka(p.stok)})` }))} />
         <Field name="qty" label="Jumlah" status={status} inputMode="numeric" />
         <div className="sm:pt-6">
           <TombolSimpan className="btn-secondary">Tambah</TombolSimpan>
         </div>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Harga diambil dari harga jual produk; bisa diubah setelah ditambahkan.</p>
       <div className="mt-2">
         <PesanForm status={{ ...status, pesan: status.galat && Object.keys(status.galat).length ? undefined : status.pesan }} />
         {status.sukses && <p className="text-sm text-emerald-700">{status.sukses}</p>}

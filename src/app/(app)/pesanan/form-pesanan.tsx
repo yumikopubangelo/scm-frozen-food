@@ -7,17 +7,16 @@ import { PesanForm } from "@/components/form";
 import { angka, rupiah } from "@/lib/format";
 import { statusAwal, type StatusForm } from "@/lib/validasi";
 
-type OpsiReseller = { id: number; nama: string; kota: string | null; tipe: "reseller" | "toko" };
+type OpsiReseller = { id: number; nama: string; kota: string | null; tipe: string };
 type OpsiProduk = { id: number; nama: string; satuan: string; harga_jual: number; stok: number };
 type Baris = { kunci: number; produk_id: string; qty: string; harga: string };
 
 const angkaDari = (s: string) => Number(s.replace(",", "."));
 
 /**
- * Form pesanan baru. Baris produk dinamis disimpan di state React lalu dikirim
- * ke server sebagai satu kolom tersembunyi "items" berisi JSON.
- * Pesanan boleh disimpan walau stok belum cukup (status "diproses" = menunggu);
- * yang tidak boleh adalah MENGIRIM sebelum stok cukup.
+ * Form pesanan reseller. Pola sama dengan form PO: baris dinamis di state React,
+ * dikirim sebagai JSON. Memesan melebihi stok DIPERBOLEHKAN (pesanan = permintaan
+ * masuk); yang dicegah adalah MENGIRIM tanpa stok. Form hanya memberi peringatan.
  */
 export function FormPesanan({
   aksi,
@@ -28,7 +27,7 @@ export function FormPesanan({
   aksi: (prev: StatusForm, fd: FormData) => Promise<StatusForm>;
   reseller: OpsiReseller[];
   produk: OpsiProduk[];
-  awalReseller?: number | undefined;
+  awalReseller?: number;
 }) {
   const [status, formAction, pending] = useActionState(aksi, statusAwal);
   const [resellerId, setResellerId] = useState(awalReseller ? String(awalReseller) : "");
@@ -36,17 +35,9 @@ export function FormPesanan({
   const [catatan, setCatatan] = useState("");
 
   const peta = useMemo(() => new Map(produk.map((p) => [String(p.id), p])), [produk]);
-
-  const ubah = (kunci: number, data: Partial<Baris>) =>
-    setBaris((bs) => bs.map((b) => (b.kunci === kunci ? { ...b, ...data } : b)));
-
-  function pilihProduk(kunci: number, id: string) {
-    const p = peta.get(id);
-    ubah(kunci, { produk_id: id, harga: p ? String(p.harga_jual).replace(".", ",") : "" });
-  }
-
-  const tambahBaris = () =>
-    setBaris((bs) => [...bs, { kunci: Math.max(0, ...bs.map((b) => b.kunci)) + 1, produk_id: "", qty: "", harga: "" }]);
+  const ubah = (kunci: number, data: Partial<Baris>) => setBaris((bs) => bs.map((b) => (b.kunci === kunci ? { ...b, ...data } : b)));
+  const pilihProduk = (kunci: number, id: string) => ubah(kunci, { produk_id: id, harga: String(peta.get(id)?.harga_jual ?? "") });
+  const tambahBaris = () => setBaris((bs) => [...bs, { kunci: Math.max(0, ...bs.map((b) => b.kunci)) + 1, produk_id: "", qty: "", harga: "" }]);
   const hapusBaris = (kunci: number) => setBaris((bs) => (bs.length > 1 ? bs.filter((b) => b.kunci !== kunci) : bs));
 
   const terisi = baris.filter((b) => b.produk_id && b.qty);
@@ -54,12 +45,10 @@ export function FormPesanan({
     terisi.map((b) => ({ produk_id: Number(b.produk_id), qty: angkaDari(b.qty), harga_satuan: angkaDari(b.harga || "0") })),
   );
   const total = terisi.reduce((s, b) => s + (angkaDari(b.qty) || 0) * (angkaDari(b.harga || "0") || 0), 0);
-  const adaKurang = terisi.some((b) => angkaDari(b.qty) > Number(peta.get(b.produk_id)?.stok ?? 0));
 
   return (
     <form
-      // onSubmit + startTransition (bukan action=) supaya React 19 tidak mereset
-      // form: baris produk di state tidak boleh hilang kalau server menolak.
+      // onSubmit + startTransition: baris dinamis tidak di-reset React 19 bila server menolak
       onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
@@ -86,8 +75,7 @@ export function FormPesanan({
             {reseller.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.nama}
-                {r.kota ? ` · ${r.kota}` : ""}
-                {r.tipe === "toko" ? " (toko)" : ""}
+                {r.kota ? ` (${r.kota})` : ""}
               </option>
             ))}
           </select>
@@ -97,7 +85,7 @@ export function FormPesanan({
           <label htmlFor="catatan" className="text-sm font-medium text-slate-700">
             Catatan
           </label>
-          <input id="catatan" name="catatan" value={catatan} onChange={(e) => setCatatan(e.target.value)} className="input" placeholder="opsional" />
+          <input id="catatan" name="catatan" value={catatan} onChange={(e) => setCatatan(e.target.value)} className="input" placeholder="mis. antar sebelum jam 10" />
         </div>
       </section>
 
@@ -105,47 +93,45 @@ export function FormPesanan({
         <h2 className="mb-3 text-base font-semibold">Produk yang dipesan</h2>
         <div className="flex flex-col gap-3">
           {baris.map((b, i) => {
-            const info = peta.get(b.produk_id);
-            const qty = angkaDari(b.qty) || 0;
-            const subtotal = qty * (angkaDari(b.harga || "0") || 0);
-            const kurang = info ? Math.max(0, qty - Number(info.stok)) : 0;
+            const p = peta.get(b.produk_id);
+            const q = Number.parseInt(b.qty, 10) || 0;
+            const kurang = p ? Math.max(0, q - p.stok) : 0;
             return (
-              <div key={b.kunci} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_7rem_9rem_7rem_auto] sm:items-start">
+              <div key={b.kunci} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_6rem_8rem_7rem_auto] sm:items-start">
                 <div>
                   <label className="text-xs text-slate-500" htmlFor={`produk-${b.kunci}`}>
                     Produk {i + 1}
                   </label>
                   <select id={`produk-${b.kunci}`} value={b.produk_id} onChange={(e) => pilihProduk(b.kunci, e.target.value)} className="input">
                     <option value="">— pilih produk —</option>
-                    {produk.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nama} (stok {angka(p.stok)} {p.satuan})
+                    {produk.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.nama} (stok {angka(x.stok)})
                       </option>
                     ))}
                   </select>
-                  {info && (
+                  {p && (
                     <p className={`mt-1 text-xs ${kurang > 0 ? "text-amber-700" : "text-slate-500"}`}>
-                      Stok gudang {angka(info.stok)} {info.satuan}
-                      {qty > 0 && kurang === 0 && ` · setelah dikirim tersisa ${angka(Number(info.stok) - qty)}`}
-                      {kurang > 0 && ` · kurang ${angka(kurang)} ${info.satuan}, perlu produksi dulu sebelum dikirim`}
+                      Stok {angka(p.stok)} {p.satuan}
+                      {kurang > 0 && ` · kurang ${angka(kurang)}: pesanan tetap bisa dicatat, dikirim setelah produksi`}
                     </p>
                   )}
                 </div>
                 <div>
                   <label className="text-xs text-slate-500" htmlFor={`qty-${b.kunci}`}>
-                    Jumlah {info ? `(${info.satuan})` : ""}
+                    Jumlah {p ? `(${p.satuan})` : ""}
                   </label>
                   <input id={`qty-${b.kunci}`} value={b.qty} onChange={(e) => ubah(b.kunci, { qty: e.target.value })} inputMode="numeric" className="input" />
                 </div>
                 <div>
                   <label className="text-xs text-slate-500" htmlFor={`harga-${b.kunci}`}>
-                    Harga / satuan (Rp)
+                    Harga / pak (Rp)
                   </label>
                   <input id={`harga-${b.kunci}`} value={b.harga} onChange={(e) => ubah(b.kunci, { harga: e.target.value })} inputMode="decimal" className="input" />
                 </div>
                 <div className="text-right">
                   <span className="text-xs text-slate-500">Subtotal</span>
-                  <p className="py-2 text-sm tabular-nums">{rupiah(subtotal)}</p>
+                  <p className="py-2 text-sm tabular-nums">{rupiah(q * (angkaDari(b.harga || "0") || 0))}</p>
                 </div>
                 <button
                   type="button"
@@ -180,11 +166,7 @@ export function FormPesanan({
           Batal
         </Link>
       </div>
-      <p className="-mt-2 text-xs text-slate-500">
-        Pesanan disimpan dengan status &quot;Diproses&quot;; stok belum berubah. Stok produk baru berkurang saat Anda klik
-        &quot;Kirim pesanan&quot; di halaman pesanan.
-        {adaKurang && " Ada produk yang stoknya belum cukup: catat produksi dulu sebelum mengirim."}
-      </p>
+      <p className="-mt-2 text-xs text-slate-500">Pesanan tersimpan berstatus &quot;diproses&quot;. Stok baru berkurang saat Anda klik &quot;Kirim&quot; di halaman pesanan.</p>
     </form>
   );
 }

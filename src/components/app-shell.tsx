@@ -19,7 +19,10 @@ export function AppShell({ email, children }: { email: string; children: React.R
   // Laci menu ditutup saat link diklik (onClick di <Link>), bukan lewat useEffect
   // yang memantau pathname: setState di dalam effect memicu render dua kali
   // dan ditandai lint react-hooks/set-state-in-effect.
-  const aktif = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  // Cocok persis atau sub-halaman ("/produk/5"). Jangan startsWith(href) saja:
+  // "/produksi" juga diawali "/produk", sehingga dua menu tersorot sekaligus.
+  const aktif = (href: string) =>
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   const sidebar = (
     <nav className="flex h-full flex-col">

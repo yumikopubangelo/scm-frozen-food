@@ -74,6 +74,9 @@ export default async function ProdukDetailPage({ params, searchParams }: PagePro
                   Catat produksi
                 </Link>
               )}
+              <Link href={`/mutasi-stok?barang=p-${id}`} className="btn-secondary">
+                Riwayat stok
+              </Link>
               <TombolHapus aksi={hapusProduk.bind(null, id)} nama={`produk ${p.nama}`} />
             </>
           }
@@ -98,7 +101,7 @@ export default async function ProdukDetailPage({ params, searchParams }: PagePro
         <EditorBom produkId={id} baris={baris} semuaBahan={bahan ?? []} />
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         <section>
           <h2 className="mb-3 text-base font-semibold">Data produk</h2>
           <FormProduk aksi={simpanProduk.bind(null, id)} awal={p} />

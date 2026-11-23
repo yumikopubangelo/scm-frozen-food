@@ -8,17 +8,15 @@ import { pesanGalat } from "@/lib/galat-db";
 import { angkaWajib, bacaForm, bulatWajib, teksOpsional, type StatusForm } from "@/lib/validasi";
 
 // =====================================================================
-// Membuat pesanan reseller. Item dikirim dari form sebagai JSON (baris
-// dinamis), lalu fungsi database buat_pesanan membuat header + item dalam
-// SATU transaksi. Pesanan baru berstatus "diproses": stok BELUM berubah.
+// Pesanan reseller: diproses -> dikirim -> diterima (atau dibatalkan).
+// Stok produk BERKURANG saat dikirim (barang keluar gudang barang jadi),
+// bukan saat pesanan dicatat. Pesanan yang masih diproses dihitung sebagai
+// "kebutuhan" oleh agen restock (M8).
 // =====================================================================
 
 const skemaItem = z.object({
   produk_id: z.number().int().positive({ error: "Pilih produk" }),
-  qty: z
-    .number({ error: "Jumlah harus angka" })
-    .int({ error: "Jumlah harus bilangan bulat (pak)" })
-    .positive({ error: "Jumlah harus lebih dari 0" }),
+  qty: z.number({ error: "Jumlah harus angka" }).int({ error: "Jumlah harus bilangan bulat (pak)" }).positive({ error: "Jumlah harus lebih dari 0" }),
   harga_satuan: z.number({ error: "Harga harus angka" }).min(0, { error: "Harga tidak boleh negatif" }),
 });
 
@@ -57,16 +55,8 @@ export async function buatPesanan(_prev: StatusForm, fd: FormData): Promise<Stat
   if (error) return { pesan: pesanGalat(error), nilai: hasil.nilai, versi: Date.now() };
 
   revalidatePath("/pesanan");
-  revalidatePath("/");
   redirect(`/pesanan/${id}?ok=ditambah`);
 }
-
-// =====================================================================
-// Perubahan status: semuanya lewat fungsi database.
-//   kirim_pesanan   diproses -> dikirim   stok produk -= qty (mutasi_stok)
-//   terima_pesanan  dikirim  -> diterima  stok tidak berubah
-//   batalkan_pesanan diproses -> dibatalkan (stok belum keluar)
-// =====================================================================
 
 const HASIL = { kirim_pesanan: "dikirim", terima_pesanan: "diterima", batalkan_pesanan: "dibatalkan" } as const;
 
@@ -76,39 +66,36 @@ async function jalankan(fungsi: keyof typeof HASIL, pesananId: number) {
   if (error) return { pesan: pesanGalat(error) };
   revalidatePath("/pesanan");
   revalidatePath("/produk");
-  revalidatePath("/mutasi-stok");
   revalidatePath("/");
   redirect(`/pesanan/${pesananId}?ok=pesanan-${HASIL[fungsi]}`);
 }
 
-/** diproses -> dikirim. Stok setiap produk di pesanan berkurang (ditolak kalau ada yang kurang). */
-export async function kirimPesanan(pesananId: number) {
-  return jalankan("kirim_pesanan", pesananId);
+/** diproses -> dikirim. Stok setiap produk berkurang; ditolak kalau ada yang kurang. */
+export async function kirimPesanan(id: number) {
+  return jalankan("kirim_pesanan", id);
 }
 
-/** dikirim -> diterima (konfirmasi dari reseller). */
-export async function terimaPesanan(pesananId: number) {
-  return jalankan("terima_pesanan", pesananId);
+/** dikirim -> diterima (konfirmasi dari reseller). Stok tidak berubah lagi. */
+export async function terimaPesanan(id: number) {
+  return jalankan("terima_pesanan", id);
 }
 
-export async function batalkanPesanan(pesananId: number) {
-  return jalankan("batalkan_pesanan", pesananId);
+/** Hanya pesanan yang belum dikirim yang bisa dibatalkan. */
+export async function batalkanPesanan(id: number) {
+  return jalankan("batalkan_pesanan", id);
 }
 
-export async function simpanCatatanPesanan(pesananId: number, _prev: StatusForm, fd: FormData): Promise<StatusForm> {
+export async function simpanCatatanPesanan(id: number, _prev: StatusForm, fd: FormData): Promise<StatusForm> {
   const hasil = bacaForm(z.object({ catatan: teksOpsional(300) }), fd);
   if (!hasil.ok) return hasil.status;
   const supabase = await createClient();
-  const { error } = await supabase.from("pesanan").update({ catatan: hasil.data.catatan }).eq("id", pesananId);
+  const { error } = await supabase.from("pesanan").update({ catatan: hasil.data.catatan }).eq("id", id);
   if (error) return { pesan: pesanGalat(error), nilai: hasil.nilai, versi: Date.now() };
-  revalidatePath(`/pesanan/${pesananId}`);
+  revalidatePath(`/pesanan/${id}`);
   return { sukses: "Catatan disimpan.", versi: Date.now() };
 }
 
-// =====================================================================
-// Edit item selama pesanan masih DIPROSES. Trigger database
-// (_jaga_item_pesanan) menolak perubahan setelah pesanan dikirim.
-// =====================================================================
+// ---------- Edit item selama pesanan masih "diproses" (trigger DB menjaga) ----------
 
 const skemaUbahItem = z.object({
   qty: bulatWajib("Jumlah", { min: 0, lebihDari: true }),
@@ -140,7 +127,6 @@ const skemaTambahItem = z.object({
 export async function tambahItemPesanan(pesananId: number, _prev: StatusForm, fd: FormData): Promise<StatusForm> {
   const hasil = bacaForm(skemaTambahItem, fd);
   if (!hasil.ok) return hasil.status;
-
   const supabase = await createClient();
   const { data: produk } = await supabase.from("produk").select("harga_jual").eq("id", hasil.data.produk_id).single();
   const { error } = await supabase

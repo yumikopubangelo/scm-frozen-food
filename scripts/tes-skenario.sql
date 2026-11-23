@@ -217,5 +217,64 @@ begin
                (select count(*) from public.mutasi_stok);
 end $$;
 
+-- ---------- 6. Ringkasan grafik dashboard (M7) ----------
+-- mutasi_harian() harus cocok dengan buku besar: total pak keluar 30 hari
+-- = total mutasi "pesanan" produk sejak awal hari ke-30 (WIB), dan selalu 30 baris.
+do $$
+declare
+  v_grafik numeric;
+  v_buku   numeric;
+begin
+  assert (select count(*) from public.mutasi_harian(30)) = 30, 'grafik harus berisi tepat 30 hari';
+  select sum(produk_keluar) into v_grafik from public.mutasi_harian(30);
+  select coalesce(sum(-qty), 0) into v_buku from public.mutasi_stok
+   where produk_id is not null and sumber = 'pesanan'
+     and waktu >= ((public.hari_ini() - 29) at time zone 'Asia/Jakarta');
+  assert v_grafik = v_buku, format('grafik %s pak, buku besar %s pak', v_grafik, v_buku);
+  raise notice 'LULUS: ringkasan grafik 30 hari = buku besar (% pak dikirim)', v_grafik;
+end $$;
+
+-- ---------- 7. Agen restock (M8) ----------
+do $$
+declare
+  v_mulai  timestamptz := clock_timestamp();
+  v_hasil  jsonb;
+  v_bahan  bigint;
+  v_sup    bigint;
+  v_po     bigint;
+  v_n      integer;
+begin
+  select id, supplier_id into v_bahan, v_sup from public.bahan_baku where supplier_id is not null order by id limit 1;
+
+  -- rata-rata permintaan: satu baris per produk, tidak negatif
+  assert (select count(*) from public.rata_permintaan_harian(28)) = (select count(*) from public.produk), 'ramalan untuk setiap produk';
+  assert not exists (select 1 from public.rata_permintaan_harian(28) where rata_harian < 0), 'permintaan tidak negatif';
+
+  v_hasil := public.simpan_hasil_agen(
+    jsonb_build_array(jsonb_build_object('supplier_id', v_sup, 'items', jsonb_build_array(jsonb_build_object('bahan_id', v_bahan, 'qty', 3)))),
+    '{"uji": true}'::jsonb, v_mulai);
+  v_po := (v_hasil->'po'->0->>'id')::bigint;
+  assert (select status from public.purchase_order where id = v_po) = 'draft', 'agen hanya membuat DRAFT';
+  assert (select sumber from public.purchase_order where id = v_po) = 'agen', 'PO ditandai sumber agen';
+  assert (select jumlah_po_dibuat from public.agen_log where id = (v_hasil->>'log_id')::bigint) = 1, 'agen_log mencatat 1 PO';
+  raise notice 'LULUS: agen membuat draft PO bersumber agen + log';
+
+  -- klik ganda: rencana yang dihitung SEBELUM simpanan pertama harus ditolak
+  perform pg_temp.harus_gagal(
+    format('select public.simpan_hasil_agen(%L::jsonb, %L::jsonb, %L::timestamptz)',
+           jsonb_build_array(jsonb_build_object('supplier_id', v_sup, 'items', jsonb_build_array(jsonb_build_object('bahan_id', v_bahan, 'qty', 3)))),
+           '{}', v_mulai),
+    'sudah dijalankan lagi', 'rencana basi (klik ganda) ditolak');
+  select count(*) into v_n from public.purchase_order where sumber = 'agen' and id >= v_po;
+  assert v_n = 1, format('klik ganda tidak boleh membuat PO kedua (ada %s)', v_n);
+end $$;
+
+-- authenticated tidak boleh menulis agen_log langsung (hanya lewat fungsi)
+do $$
+begin
+  perform pg_temp.harus_gagal('insert into public.agen_log (ringkasan) values (''{}'')', 'permission denied',
+                              'authenticated tidak bisa menulis agen_log langsung');
+end $$;
+
 reset role;
 rollback;

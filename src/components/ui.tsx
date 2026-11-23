@@ -28,6 +28,9 @@ const PESAN_OK: Record<string, string> = {
   "pesanan-diterima": "Pesanan dikonfirmasi sudah diterima reseller.",
   "pesanan-dibatalkan": "Pesanan dibatalkan. Stok tidak berubah.",
   "produksi-dicatat": "Produksi dicatat. Stok bahan berkurang sesuai resep dan stok produk bertambah.",
+  "pesanan-dikirim": "Pesanan dikirim. Stok produk sudah berkurang; isi pesanan kini terkunci.",
+  "pesanan-diterima": "Pesanan dikonfirmasi diterima reseller.",
+  "pesanan-dibatalkan": "Pesanan dibatalkan.",
 };
 
 /** Banner hijau setelah simpan/hapus (dibaca dari ?ok=...). */

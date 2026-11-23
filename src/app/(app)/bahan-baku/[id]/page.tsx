@@ -36,7 +36,14 @@ export default async function BahanDetailPage({ params }: PageProps<"/bahan-baku
         <JudulHalaman
           judul={b.nama}
           deskripsi={`Kode ${b.kode} · stok ${angka(b.stok)} ${b.satuan}`}
-          aksi={<TombolHapus aksi={hapusBahan.bind(null, id)} nama={`bahan ${b.nama}`} />}
+          aksi={
+            <>
+              <Link href={`/mutasi-stok?barang=b-${id}`} className="btn-secondary">
+                Riwayat stok
+              </Link>
+              <TombolHapus aksi={hapusBahan.bind(null, id)} nama={`bahan ${b.nama}`} />
+            </>
+          }
         />
         <div className="-mt-3 mb-4">
           <BadgeStok stok={Number(b.stok)} batas={Number(b.reorder_point)} />

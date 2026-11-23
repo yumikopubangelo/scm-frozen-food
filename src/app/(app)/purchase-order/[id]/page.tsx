@@ -10,7 +10,7 @@ import { angka, hariIni, nomorWa, rupiah, selisihHari, tambahHari, tanggal } fro
 import { STATUS_PO, type StatusPo } from "@/lib/status";
 import { cekGalatMuat } from "@/lib/galat-db";
 import { batalkanPo, kirimPo, simpanCatatanPo, terimaPo } from "../actions";
-import { CatatanDokumen } from "@/components/catatan-dokumen";
+import { CatatanDokumen } from "@/components/catatan";
 import { EditorItemPo, type ItemPo } from "../editor-item-po";
 
 export const metadata: Metadata = { title: "Detail PO" };

@@ -274,27 +274,303 @@ Tidak ada.
 
 ---
 
-## M6 — Pesanan reseller & pengiriman: diproses → dikirim → diterima (21 Nov 2026)
-
-Dikerjakan oleh agent Lovable lewat GitHub (fork + pull request), mengikuti pola M4.
+## M5 — Produksi: bahan berkurang sesuai BOM, produk bertambah (21–23 Nov 2026)
 
 ### Yang dikerjakan
-- **Daftar pesanan** (`/pesanan`): tab status dengan jumlah, cari nomor, filter reseller, paginasi 25 per halaman, total per pesanan, dan label **Siap kirim / Stok kurang** untuk pesanan yang masih diproses.
-- **Pesanan baru**: pilih reseller, baris produk dinamis (harga jual terisi otomatis), stok gudang dan "setelah dikirim tersisa N" tampil per baris; peringatan kalau stok kurang (pesanan tetap boleh disimpan). `?reseller=<id>` memilih reseller otomatis.
-- **Detail pesanan**: linimasa (Pesanan masuk → Dikirim dari gudang → Diterima reseller), **Cek stok sebelum kirim** (stok sekarang → setelah kirim), tombol **Kirim pesanan (stok berkurang)** hanya muncul kalau semua stok cukup, peringatan + link ke Catat produksi untuk produk yang kurang, **Konfirmasi diterima**, **Batalkan**, edit item selama diproses, daftar **Keluar dari gudang barang jadi** dari buku besar, catatan, dan pesan WhatsApp ke reseller.
-- Halaman reseller: tombol **Buat pesanan** dan **Lihat pesanan**.
-- `lib/hitung-pesanan.ts` (`cekKirim`, `totalPesanan`, `stokCukup`) + 6 unit test; `CatatanPo` dipindah menjadi komponen umum `components/catatan-dokumen.tsx` (dipakai PO dan pesanan).
-- Tes skenario DB baru **4b: kirim → stok turun** (6 pemeriksaan). `docs/pesanan.md`.
+- **Form catat produksi dengan pratinjau langsung**: pilih produk dan jumlah, lalu tabel menunjukkan pemakaian tiap bahan, stok sekarang, dan sisa setelah produksi. Bahan yang kurang ditandai merah, tombol simpan **nonaktif**, dan ada tautan ke pembuatan PO. Tombol "Maks" mengisi kapasitas maksimum. Dropdown produk menampilkan "bisa diproduksi N" untuk tiap produk.
+- **Tanggal produksi** boleh lampau, tapi ditolak server kalau di masa depan.
+- **Riwayat produksi**: ringkasan hasil 30 hari per produk (batang), filter produk, paginasi (±1.630 batch).
+- **Detail batch**: hasil (+qty → stok produk), daftar bahan yang keluar dari gudang beserta stok sesudahnya, perkiraan biaya bahan, nilai jual.
+- Tombol **"Catat produksi"** di halaman produk.
+- Fungsi `kebutuhanProduksi()`, `bagiBulatBawah()`, `bulat2()` + **7 unit test baru** (total 31).
+- `cekGalatMuat()` dipasang di **6 halaman detail**.
+- `docs/produksi.md`.
 
 ### Keputusan teknis
-1. **Tidak ada migrasi baru.** Fungsi `buat_pesanan`, `kirim_pesanan`, `terima_pesanan`, `batalkan_pesanan` dan trigger penjaga item sudah ada sejak M1; M6 hanya memanggilnya lewat `supabase.rpc`.
-2. **Tombol kirim disembunyikan kalau stok kurang**, diganti peringatan berisi link produksi. Database tetap menjadi penjaga terakhir (stok dicek ulang di dalam transaksi).
-3. **Jumlah pesanan bilangan bulat** (pak), sesuai kolom `pesanan_item.qty integer`; divalidasi zod sebelum ke database.
+1. **Pratinjau dihitung di browser, keputusan tetap di database.** Pratinjau memakai rumus yang sama dengan fungsi `catat_produksi`, termasuk pembulatan 2 desimal, tapi database tetap menjadi penjaga terakhir yang menolak kalau bahan kurang.
+2. **Biaya batch memakai harga bahan saat ini.** Harga historis tidak disimpan. Ini keterbatasan yang dinyatakan jujur di halaman detail dan di docs. Untuk akuntansi sungguhan, harga per mutasi perlu dicatat.
+3. **Agent menguji di tab browser terpisah.** Pemilik sedang memakai aplikasi di tab yang sama, dan aksi agent sempat "berebut" tab. Mulai titik ini agent membuka tab latar sendiri (sesi login tetap sama).
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| **Bug M3:** kapasitas produksi kadang kurang 1 pak | `Math.floor(0.3 / 0.1)` = 2, karena 0,3/0,1 = 2,9999… di pecahan biner. Pemindaian kombinasi realistis menemukan **526 kasus** | `bagiBulatBawah(a,b) = Math.floor(a/b + 1e-9)` + unit test. Contoh tes awal agent (0,6/0,15) ternyata bukan kasus bermasalah; diganti 0,3/0,1 dan 0,7/0,1 setelah dicek |
+| **Supabase gangguan** (20–21 Nov): halaman detail menampilkan **404** | API gateway Supabase membalas **HTTP 555** setelah 10 detik untuk Auth & REST, padahal Postgres sehat (pooler 0,75 dtk, PostgREST tersambung). Status page Supabase: "All Systems Operational". Halaman mengabaikan error query, jadi data `null` dianggap "tidak ada" | Diagnosis dari header respons (`sb-gateway-version`, `sb-project-ref` → berasal dari gateway Supabase, bukan jaringan lokal). Perbaikan kode: `cekGalatMuat()` membuat gangguan tampil sebagai halaman error. Gangguannya sendiri di luar kendali; per 23 Nov sudah pulih (200, 1,5 dtk) |
+| Agent sempat salah diagnosis | Variabel shell mengambil dua hostname karena `.env.local` memuat contoh URL di baris komentar | Diagnosis diulang dengan Node yang membaca nilai variabel sebenarnya |
+| **Berkas M5 tampak "hilang"** setelah 2 hari | Pemilik membuat repo GitHub, meng-commit kerja M5 yang belum di-commit sebagai "initial commit" di `main`, push, lalu checkout branch `M4` | Agent membaca `git reflog` dan isi commit tersebut (14 berkas M5 utuh), lalu pindah ke `main`. Riwayat yang sudah di-push tidak diubah |
+| **Bug M2:** dua menu tersorot di halaman Produksi | `pathname.startsWith("/produk")` juga cocok untuk `/produksi` | Cocok persis atau `href + "/"` |
+| Sesi login panel kedaluwarsa | Lewat 2 hari + refresh token gagal saat gateway gangguan | Pemilik login ulang |
+| Hampir menekan tombol yang salah | Tombol submit pertama di halaman adalah "Keluar" (sidebar), bukan "Catat produksi" | Agent hanya men-scroll ke sana, lalu memilih tombol berdasarkan label persis. Pelajaran: jangan memilih `button[type=submit]` pertama |
+| Simpan pertama tampak tidak berpindah halaman | Halaman detail di-compile saat pertama dibuka (dev) | Agent **tidak** mengklik ulang (risiko produksi tercatat dua kali), melainkan mengecek database: tercatat tepat 1 kali |
 
 ### Hasil tes
-- `tsc`, `lint`, `next build`: lulus. **Unit test 37/37** (6 baru).
-- **Tes skenario DB 25/25** di Postgres 17 lokal (migrasi 0001–0004 + seed simulasi 12 bulan), termasuk 4b: stok Dimsum Ayam 40 → 25, Siomay 10 → 0, 2 baris mutasi keluar (total −25), kirim ganda ditolak, dan buku besar tetap konsisten (22.034 baris mutasi).
-- Belum diuji di browser dengan Supabase sungguhan (agent tidak punya kredensial Supabase proyek).
+- `tsc`, `lint`, `build`: lulus. **Unit test 31/31. Tes skenario DB 19/19**, dengan buku besar **21.727 = 21.720 + 7 mutasi** dari produksi uji (6 bahan keluar + 1 produk masuk) ✔.
+- **Uji di browser**:
+  1. Produksi **20 pak Cireng**: pratinjau tapioka −5 kg (21,4 → 16,4), ayam −1,2 kg (37,5 → 36,3), plastik −20 (600 → 580), daun bawang −0,2, bawang putih −0,1, bumbu −0,1; stok Cireng 84 → 104. Disimpan sebagai **PRD-261123-1636**, dan halaman detail menunjukkan angka yang sama persis. Biaya Rp 7.560/pak sama dengan biaya BOM di M3 ✔.
+  2. **Dimsum 10 pak** (telur habis): baris Telur merah "kurang 0,1 kg", tombol nonaktif, ada tautan PO ✔.
+  3. **Tanggal besok** dipaksa masuk lewat skrip, lalu server menolak: "Tanggal produksi tidak boleh di masa depan"; jumlah tetap terisi. Database: 0 produksi bertanggal masa depan ✔.
+  4. Riwayat: 1.631 batch / 66 halaman; ringkasan 30 hari tampil; sidebar hanya menyorot "Produksi" setelah perbaikan.
+- Screenshot: `m5-form-pratinjau.jpg`, `m5-bahan-kurang.jpg`, `m5-produksi-daftar.png`, `m5-produksi-detail.png`.
 
 ### Campur tangan pemilik
-- Uji coba di browser setelah merge: buat pesanan → kirim → cek stok produk turun di halaman Produk & Mutasi stok. Ambil screenshot untuk laporan (`docs/screenshots/m6-*`).
+- Membuat repo GitHub dan push. Ini lebih awal dari rencana M9 dan dilakukan sendiri oleh pemilik.
+- Login ulang di panel browser setelah sesi kedaluwarsa.
+
+---
+
+## M6 — Pesanan reseller & pengiriman (23 Nov 2026)
+
+### Yang dikerjakan
+- **Daftar pesanan**: tab status dengan jumlah, filter nomor & reseller, paginasi (±1.700 pesanan), dan tanda **"Siap kirim" / "Stok kurang"** untuk pesanan yang masih diproses.
+- **Form pesanan baru**: pilih reseller, lalu baris produk dinamis. Harga terisi dari harga jual dan stok ditampilkan. Memesan melebihi stok diperbolehkan dengan peringatan, karena pesanan adalah permintaan; yang dicegah adalah mengirim tanpa stok.
+- **Detail pesanan**: linimasa (masuk → dikirim → diterima), **Kirim (stok berkurang)**, **Konfirmasi diterima**, **Batalkan** (hanya sebelum dikirim), edit isi selama diproses, peringatan "Belum bisa dikirim" + tautan *Catat produksi*, daftar "Keluar dari gudang barang jadi", catatan, dan **pesan WhatsApp ke reseller** yang isinya mengikuti status.
+- Halaman reseller: tombol **Catat pesanan** dan **Riwayat pesanan**.
+- Form catatan dipindah menjadi komponen bersama `CatatanDokumen` (dipakai PO & pesanan).
+- `docs/pesanan.md`.
+
+### Keputusan teknis
+1. **Stok produk berkurang saat dikirim.** Pesanan diproses = kebutuhan, yang dipakai agen restock di M8.
+2. **"Siap kirim" diperiksa per pesanan, bukan alokasi gabungan.** Lebih sederhana dan cukup untuk UMKM. Keterbatasannya ditulis di docs.
+3. **Tombol "Kirim" sengaja tidak dinonaktifkan** walau stok kurang. Tampilan bisa basi; database tetap penjaga terakhir dan pesannya jelas. Ini berbeda dengan form produksi (M5), yang menonaktifkan tombol karena pratinjaunya dihitung saat itu juga.
+4. **Batal hanya sebelum dikirim.** Retur adalah alur lain (di luar MVP).
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| Form di tab uji agent tidak bereaksi (harga tidak terisi) | Agent menguji di **tab latar**. Chrome menunda hidrasi React, dan konten di dalam batas `loading.tsx` dihidrasi belakangan. Diagnosis: elemen form tidak punya properti `__reactFiber…`, sidebar punya; tidak ada error di konsol/log | Tab uji ditampilkan (front) selama pengujian form. Agent kini menunggu hidrasi sebelum berinteraksi. Bukan bug aplikasi |
+| Screenshot memuat email admin | Diambil penuh, sehingga footer sidebar ikut | Area footer ditutup dengan Pillow sebelum commit. Aturan ditambahkan ke `CLAUDE.md` |
+| `python -c` multi-baris gagal | Perintah `python` di komputer ini berupa skrip pembungkus Windows | Pakai berkas skrip (`.py`) |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 31/31. Tes DB 19/19**; buku besar **21.729 = 21.727 + 2** (Cireng & Bakso keluar) ✔.
+- **Uji siklus penuh di browser**:
+  1. Daftar: Diproses 5 (2 "Siap kirim", 3 "Stok kurang" karena telur habis), Dikirim 3, Diterima 1.691; 68 halaman.
+  2. Pesanan baru tanpa reseller → "Pilih reseller"; baris Cireng 10 & Bakso 5 tetap utuh; total Rp 375.000 ✔.
+  3. Reseller **Warung Bu Yati Cipedes** → **PSN-261123-1712** (diproses). WA: nomor `62852…`, isi "sedang disiapkan" + daftar produk ✔ (tidak dibuka/dikirim).
+  4. Edit Bakso 5 → 6: total Rp 420.000 ✔.
+  5. **Kirim** → **Cireng 104 → 94, Bakso 64 → 58**; isi terkunci; banner "Pesanan dikirim…" ✔.
+  6. **Konfirmasi diterima** → status Diterima, tidak ada aksi tersisa ✔.
+  7. Pesanan seed **PSN-261120-1697** (Lumpia 2 pak, stok 0): halaman menampilkan "Belum bisa dikirim"; klik Kirim → **ditolak database**: "Stok produk tidak cukup untuk dikirim: Lumpia Udang isi 8 (pesan 2, stok 0)"; status tetap diproses ✔.
+- Data yang berubah karena uji: 1 pesanan baru diterima (stok Cireng & Bakso berkurang, tercatat di mutasi). Pesanan seed tidak diubah.
+- Screenshot: `m6-pesanan-daftar.png`, `m6-pesanan-baru-validasi.jpg`, `m6-pesanan-dikirim.png`.
+
+### Campur tangan pemilik
+- Memberi izin push M5 ke GitHub.
+
+## M7 — Dashboard & buku besar mutasi stok (23 Nov 2026)
+
+### Yang dikerjakan
+- **Dashboard lengkap** (`/`):
+  - 4 kartu yang bisa diklik: bahan di bawah ROP (+ berapa yang belum punya PO), produk di bawah stok minimum, PO berjalan (draft/dikirim/**terlambat**), pesanan berjalan (diproses/siap kirim/dikirim).
+  - Banner kuning "N bahan kritis belum punya PO" dengan tombol **Jalankan agen restock** (halaman agen menyusul di M8).
+  - **Grafik pergerakan stok 30 hari**: (1) arus barang jadi dalam pak, diproduksi vs dikirim; (2) nilai bahan baku dalam rupiah, diterima dari PO vs terpakai produksi.
+  - Tabel **bahan kritis**, diurutkan dari yang paling jauh di bawah ROP, dengan kolom "sedang dipesan" atau tautan **Buat PO**. Tabel **stok barang jadi** dibandingkan pesanan yang belum dikirim, dengan tautan produksi kalau kurang.
+  - Daftar **PO berjalan** (perkiraan tiba, badge terlambat, badge agen) dan **pesanan berjalan** (siap kirim / stok kurang).
+- **Halaman Mutasi stok** (`/mutasi-stok`): buku besar semua pergerakan stok dengan filter barang, jenis, dan rentang tanggal (bawaan 30 hari), paginasi 50 baris, tautan ke dokumen asal (PO/produksi/pesanan). Kalau satu barang dipilih, muncul **grafik riwayat stok** (garis tangga) dengan garis ROP/stok minimum.
+- Tombol **Riwayat stok** di halaman detail bahan baku dan produk.
+- Migrasi `0005_ringkasan_mutasi.sql`: fungsi `mutasi_harian(p_hari)` untuk grafik.
+- Komponen `components/grafik.tsx` (SVG) + `lib/grafik.ts` (skala sumbu, unit-tested). Alat bantu dev `scripts/kueri.mjs`.
+- `docs/dashboard.md`.
+
+### Keputusan teknis
+1. **Grafik SVG buatan sendiri, bukan Recharts.** Rencana awal memakai Recharts, tetapi hanya dua jenis grafik sederhana yang dibutuhkan. SVG di Server Component = 0 KB JavaScript tambahan, tampil langsung tanpa menunggu hidrasi, dan tooltip cukup dengan `<title>` bawaan browser. Konsekuensinya, tooltip lebih sederhana (tanpa animasi).
+2. **Agregasi harian di database** (`mutasi_harian`), bukan di aplikasi. 30 hari bisa berisi >1.000 mutasi, padahal PostgREST memotong di 1.000 baris; agregasi di Postgres hanya mengirim 30 baris. Fungsinya `SECURITY INVOKER` (hanya membaca), jadi RLS tetap berlaku.
+3. **Nilai bahan dalam rupiah.** Bahan punya satuan berbeda (kg, liter, butir), jadi tidak bisa dijumlah langsung. Nilai = qty × harga satuan *saat ini* (perkiraan; harga historis tidak disimpan per mutasi).
+4. **Saldo awal & stok opname tidak dihitung sebagai arus** di grafik dashboard, karena bukan barang yang benar-benar masuk/keluar. Keduanya tetap tampil di halaman Mutasi stok.
+5. **Grafik riwayat stok berbentuk tangga**, karena stok berubah per kejadian, bukan bergerak mulus. Titik awal diambil dari mutasi terakhir sebelum rentang, supaya garis dimulai dari stok yang benar.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| `tsc`: *Type instantiation is excessively deep* | Fungsi filter generik menerima tipe query builder Supabase yang sangat dalam | Tipe dipersempit ke 3 metode yang dipakai (`eq`, `gte`, `lt`) |
+| `?hal=99` → halaman error "PGRST103 Requested range not satisfiable" | Nomor halaman melebihi jumlah data, misalnya setelah filter dipersempit saat sedang di halaman 5. **Bug lama yang juga ada di daftar PO, produksi, dan pesanan** | Helper `kembaliKeHalaman1()` di `galat-db.ts`: arahkan ke halaman 1 dengan filter yang sama. Dipasang di keempat halaman daftar |
+| Dashboard di ponsel melebar ke 698 px (perlu geser ke samping) | Kartu tabel ada di dalam `grid`; item grid punya `min-width: auto` sehingga tidak bisa lebih sempit dari isi tabelnya, walau tabel dibungkus `overflow-x-auto` | `[&>*]:min-w-0` pada grid (dashboard & detail produk) |
+| Tabel kecil dashboard tergulung ke samping di desktop | `.tabel` punya `min-w-[640px]` (cocok untuk halaman daftar, terlalu lebar untuk kartu setengah layar) | `tabel min-w-0` khusus di dashboard |
+| Tanggal "dari" > "sampai" | Isian pengguna | Ditukar otomatis |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 36/36** (+5 untuk skala grafik). **Tes DB 20/20**: tes baru memastikan total grafik 30 hari = buku besar.
+- **Uji browser** (1400×1000 dan ponsel 375 px):
+  1. Dashboard: 10/16 bahan kritis (8 belum ada PO), 3/8 produk kritis, PO 1 draft · 2 dikirim · **2 terlambat**, pesanan 5 diproses (2 siap) · 3 dikirim. Grafik 30 hari: diproduksi 3.720 pak vs dikirim 3.733 pak; bahan diterima Rp 66,2 jt vs terpakai Rp 69,4 jt.
+  2. Mutasi stok tanpa filter: 1.624 mutasi dalam 30 hari, 33 halaman.
+  3. Filter Siomay: grafik tangga + garis stok minimum; stok akhir di grafik (42) = stok di master ✔. Filter "Terima PO" 20–23 Nov: tepat 2 baris (PO-261121-0796, uji M4) ✔.
+  4. `?hal=99` dengan tanggal terbalik → diarahkan ke halaman 1, tanggal ditukar ✔. PO `?status=draft&hal=50` → halaman 1 ✔.
+  5. Ponsel: lebar dokumen = 375 px di dashboard, mutasi stok, dan detail produk (tidak ada geser samping) ✔.
+- Screenshot: `m7-dashboard-atas.jpg`, `m7-dashboard-bawah.jpg`, `m7-mutasi-stok.jpg` (footer email ditutup).
+
+### Campur tangan pemilik
+- Memberi izin push M6 ke GitHub.
+
+## M8 — Agen restock (24 Nov 2026)
+
+### Yang dikerjakan
+- **Otak agen** `lib/agen-restock.ts`: fungsi murni `hitungRencana()`. Untuk tiap bahan menghitung kebutuhan dari pesanan reseller yang kekurangan stok (diturunkan lewat BOM) dan dari ramalan selama lead time, lalu mengambil yang terbesar. Bahan dipesan bila proyeksi < reorder point. Qty dibulatkan per satuan (lembar/100, pcs/50), dikelompokkan **satu draft PO per supplier**, dan setiap baris diberi **alasan tertulis**. 11 unit test.
+- **Migrasi `0006_agen_restock.sql`**:
+  - `rata_permintaan_harian(28)`: rata-rata bergerak 28 hari penuh, otomatis memakai ramalan S4 kalau ada (pintu untuk M8b).
+  - `simpan_hasil_agen()`: membuat semua draft PO + `agen_log` dalam satu transaksi, dengan kunci anti klik ganda.
+- **Halaman `/agen-restock`**:
+  - Empat langkah cara kerja agen (amati, hitung, usulkan, admin menyetujui).
+  - Ringkasan data yang diamati, termasuk barang jadi yang kurang untuk pesanan.
+  - Usulan per supplier dengan tabel stok/ROP, sedang dipesan, kebutuhan (dari pesanan/ramalan), proyeksi, usulan + biaya, dan alasan yang bisa dibuka.
+  - Tombol **"Buat N draft PO"**, banner hasil dengan tautan ke tiap draft, dan riwayat agen.
+- Draft PO dari agen memakai alur M4 yang sudah ada: label "dibuat agen restock" dan tombol "Setujui & kirim ke supplier".
+- `docs/agen-restock.md`.
+
+### Keputusan teknis
+1. **Berbasis aturan, tanpa LLM.** Keputusan pembelian harus bisa diaudit dan diulang. Setiap angka bisa ditelusuri ke rumus, dan alasannya ditulis per bahan. *Human-in-the-loop*: agen hanya membuat **draft**, pengiriman ke supplier tetap lewat tombol admin.
+2. **Kebutuhan = maks(pesanan, ramalan), bukan jumlah.** Pesanan yang sudah masuk adalah bagian dari permintaan yang diramalkan, jadi menjumlahkan keduanya berarti menghitung dua kali.
+3. **Logika di TypeScript murni, penyimpanan di Postgres.** Rumus mudah diuji unit dan dibaca; database menjamin atomisitas, kunci, dan hak akses (`agen_log` hanya bisa ditulis lewat fungsi).
+4. **Server menghitung ulang + "sidik" pratinjau.** Browser tidak mengirim jumlah apa pun, hanya sidik rencana yang dilihat admin. Kalau hasil hitung ulang berbeda, simpan ditolak, sehingga yang disimpan = persis yang dilihat.
+5. **Pintu S4 dibuat sekarang** (di `rata_permintaan_harian`), sehingga M8b cukup mengimpor baris `forecast_permintaan` tanpa mengubah kode agen.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| Tes DB "klik ganda tidak membuat PO kedua" gagal (menghitung 0) | Tesnya salah: `created_at` = `now()` = waktu **awal transaksi**, lebih awal dari `clock_timestamp()` yang dicatat tes | Hitung berdasarkan `id >= PO pertama`. Fungsi agen sendiri sengaja memakai `clock_timestamp()` untuk waktu log, karena alasan yang sama |
+| Konsol menampilkan error PGRST103 di halaman Mutasi stok | Sisa log dari uji `?hal=99` di M7 **sebelum** perbaikan; bukan error baru | Tidak perlu perubahan (dicek ulang) |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 47/47** (+11 agen). **Tes DB 23/23** (+3: agen hanya membuat draft bersumber agen + log; rencana basi/klik ganda ditolak dan tidak membuat PO kedua; `authenticated` tidak bisa menulis `agen_log` langsung).
+- **Uji di browser**:
+  1. Pratinjau: 10/16 bahan di bawah ROP; kekurangan Dimsum 10 pak & Lumpia 12 pak; usulan **9 bahan dari 6 supplier, Rp 2.512.000**. Udang kupas (sudah ada PO 7 kg) dan ikan tenggiri (PO 30 kg) **tidak** dipesan lagi ✔. Telur: 0/5 kg → 7 kg ✔ (sesuai hitungan manual di docs).
+  2. **Buat 6 draft PO** → PO-261124-0805…0810, semua *draft*, sumber *agen*, total di DB = pratinjau ✔. Halaman PO menampilkan label agen + "Setujui & kirim ke supplier" ✔.
+  3. Dijalankan lagi → "Tidak ada bahan yang perlu dipesan" (tidak dobel) ✔. Dashboard: "10/16 · semua sudah dipesan" ✔.
+  4. **Data berubah saat pratinjau terbuka**: draft Kios Bumbu dibatalkan sehingga agen mengusulkannya lagi, lalu dibuat PO manual daun bawang 1 kg saat pratinjau masih terbuka. Klik "Buat 1 draft PO" → **ditolak**: "Data stok/pesanan/PO berubah sejak pratinjau ditampilkan…" ✔. PO uji dibatalkan, halaman dimuat ulang, dijalankan → PO-261124-0816 ✔.
+- Data yang tertinggal untuk demo: **6 draft PO agen** (0805, 0807–0810, 0816) menunggu persetujuan; 0806 & 0815 (uji) dibatalkan.
+- Screenshot: `m8-agen-pratinjau.jpg`, `m8-agen-hasil.jpg`, `m8-draft-po-agen.jpg`.
+
+### Campur tangan pemilik
+- Memberi izin push M7 ke GitHub.
+
+## M9 — Deploy ke Vercel (24 Nov 2026)
+
+**Link aplikasi: https://scm-frozen-food.vercel.app**
+
+### Yang dikerjakan
+- **Pemeriksaan sebelum deploy** (oleh agent):
+  - `.env.local` tidak pernah masuk git (`git log --all -- .env.local` kosong).
+  - Pemindaian seluruh riwayat commit untuk pola `sb_secret_`, `sb_publishable_…`, `service_role`, JWT, dan URI Postgres berpassword: tidak ada temuan selain contoh di `.env.example`.
+  - Aplikasi hanya membaca `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+  - Build produksi lulus.
+- **Deploy** (oleh pemilik, karena butuh login akun): Vercel → Import repo GitHub → isi 2 environment variable → Deploy.
+- **Uji di produksi**.
+
+### Keputusan teknis
+1. **Hanya 2 variabel di Vercel.** `DATABASE_URL` (berisi password database) sengaja **tidak** dipasang. Aplikasi tidak memerlukannya karena semua akses lewat Supabase API dengan RLS. Variabel itu hanya untuk skrip migrasi di laptop.
+2. **Publishable key aman di publik** karena database menolak semua akses tanpa login (RLS + GRANT, diuji di M1), dan pendaftaran publik dimatikan.
+3. **Satu database untuk lokal & produksi.** Untuk tugas ini cukup, karena hanya ada satu admin dan data contoh. Di dunia nyata sebaiknya ada project Supabase terpisah untuk pengembangan.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| Agent tidak bisa login di situs produksi | Aturan keamanan: agent tidak boleh mengetik password akun sungguhan | Pemilik login sendiri di panel browser, lalu agent melanjutkan pengujian |
+| Link deploy tidak ikut terkirim di pesan pertama | Pemilik menekan tombol balasan tanpa menempel URL | Agent meminta URL dan **tidak menebak** `*.vercel.app` (bisa milik orang lain) |
+
+### Hasil tes di produksi
+1. Tanpa login: `/agen-restock` dialihkan ke `/login?next=%2Fagen-restock`, permintaan langsung ke `/mutasi-stok` dialihkan, dan tidak ada error di konsol ✔.
+2. Setelah pemilik login: kembali otomatis ke `/agen-restock` (parameter `next` bekerja) ✔.
+3. Dashboard: angka **sama persis** dengan lokal (10/16 · semua sudah dipesan; PO 9 = 7 draft · 2 dikirim · 2 terlambat) ✔. Tanggal "24 Nov 2026" dan jam mutasi "21.29" tetap **WIB** walau server Vercel memakai UTC ✔.
+4. Mutasi stok (grafik Siomay), agen restock (tidak ada usulan dobel), draft PO-261124-0807 (label agen), pesanan diproses (5, tanda siap kirim): semua tampil ✔.
+5. Ponsel 375 px: lebar dokumen = 375 (tidak ada geser samping) ✔.
+6. **Tombol Keluar** (pertama kali diuji, sengaja ditunda sejak M2): diarahkan ke `/login`, cookie sesi `sb-…` terhapus, `/purchase-order/807` dialihkan, dan tombol *Back* browser berakhir di `/login?next=…`, bukan menampilkan data ✔.
+- Tidak ada data yang diubah selama uji produksi.
+- Screenshot: `m9-produksi-ponsel.jpg`.
+
+### Campur tangan pemilik
+- Login Vercel dengan GitHub, impor repo, mengisi 2 environment variable, menekan Deploy.
+- Mengirim link deploy.
+- Login admin di panel browser untuk pengujian produksi.
+- Memberi izin push M8.
+
+---
+
+## M10 — Ringkasan akhir (24 Nov 2026)
+
+### Hasil
+
+**Aplikasi: https://scm-frozen-food.vercel.app** · Kode: https://github.com/yumikopubangelo/scm-frozen-food
+
+Ke-8 fitur MVP selesai dan diuji: login admin, master data, BOM, Purchase Order, produksi, pesanan & pengiriman, dashboard, dan agen restock. Ada tambahan yang tidak diminta, tetapi muncul dari kebutuhan:
+- buku besar mutasi stok dengan grafik riwayat per barang;
+- stok opname;
+- pesan WhatsApp ke supplier/reseller (tidak terkirim otomatis);
+- tanda "siap kirim";
+- PO terlambat;
+- pratinjau kebutuhan bahan saat produksi.
+
+| Ukuran | Nilai |
+|---|---|
+| Waktu kalender | 20 Nov 18.50 → 24 Nov 00.27 WIB (±3,5 hari, dengan jeda 21–23 Nov) |
+| Commit milestone | 10 (M0–M9) + commit M10 ini |
+| Kode aplikasi | ±6.800 baris TypeScript/TSX · ±1.500 baris SQL (6 migrasi, seed, tes) |
+| Halaman | 25 rute (semua wajib login kecuali `/login`) |
+| Tes otomatis | **47 unit test** (6 berkas Vitest) · **23 tes skenario database** (di-rollback) |
+| Uji manual | Setiap milestone diuji ujung-ke-ujung di browser (desktop + ponsel 375 px), ditambah uji produksi di M9 |
+| Konsistensi data | Stok setiap barang = jumlah riwayat mutasinya (diperiksa di tes DB; ±21.700 baris) |
+| Dokumentasi | `PROSES.md`, `CLAUDE.md`, 8 penjelasan di `docs/`, 31 screenshot (email admin selalu ditutup) |
+
+### Kelebihan agent (yang terbukti di proses ini)
+
+1. **Merencanakan dulu, lalu disiplin per milestone.** Skema, halaman, dan urutan kerja disetujui sebelum menulis kode. Setiap milestone ditutup dengan tes, catatan, lalu commit, sehingga ada 10 titik aman untuk kembali.
+2. **Keamanan dirancang dari bawah, bukan ditempel belakangan.**
+   - RLS + GRANT eksplisit: role `authenticated` bahkan tidak bisa meng-UPDATE kolom stok.
+   - Stok hanya berubah lewat fungsi database yang atomik.
+   - Riwayat dilindungi FK RESTRICT.
+   - Agen hanya bisa membuat *draft*.
+   - Tidak ada secret di repo; seluruh riwayat git dipindai sebelum deploy.
+3. **Menguji lebih dari "halaman terbuka".** Tes skenario SQL menguji aturan bisnis langsung di database (pengiriman ditolak bila stok kurang, anon ditolak, klik ganda agen ditolak). Uji browser mencakup jalur gagal, bukan hanya jalur sukses.
+4. **Menemukan bug sendiri dan memperbaiki akarnya, bukan gejalanya.** Contohnya:
+   - Galat float kapasitas produksi (526 kasus ditemukan lewat pemindaian).
+   - Halaman 404 palsu saat Supabase gangguan.
+   - Error halaman melebihi jumlah data (bug lama M4–M6 yang ketahuan di M7).
+   - Halaman melebar di ponsel.
+
+   Setiap perbaikan diterapkan ke **semua** halaman yang terkena, lalu ditulis sebagai aturan di `CLAUDE.md`.
+5. **Diagnosis berbasis bukti.** Saat Supabase gangguan (HTTP 555), agent membuktikan lewat header respons bahwa masalahnya ada di gateway Supabase, bukan jaringan lokal atau kode. Saat berkas M5 tampak hilang, agent membaca `git reflog` alih-alih menulis ulang.
+6. **Menghormati batas.**
+   - Berhenti setiap kali butuh akun (Supabase, Vercel) dan memberi langkahnya.
+   - Tidak mengetik password asli.
+   - Tidak menebak URL deploy.
+   - Push hanya bila diminta, per kali.
+   - Tidak mengklik ulang tombol simpan yang tampak lambat (risiko data dobel) tetapi mengecek database.
+7. **Dokumentasi untuk manusia dan agent berikutnya.**
+   - Setiap fitur punya penjelasan rumus, jebakan, dan "kalau mau mengubah X, sentuh berkas mana".
+   - `CLAUDE.md` membuat agent anggota kelompok lain bisa langsung melanjutkan.
+
+### Kekurangan agent (jujur)
+
+1. **Salah sendiri, beberapa kali.** Semuanya tertangkap sebelum sampai ke pengguna, tetapi tetap memakan waktu:
+   - Sempat salah melaporkan isi `.env.local` (placeholder ternyata ada di baris komentar).
+   - Contoh unit test pertama untuk bug float justru bukan kasus bermasalah.
+   - Satu perintah `perl` merusak tautan menjadi `/PLACEHOLDER`.
+   - Perintah `python3 -` menggantung menunggu input.
+   - Tes DB agen sempat salah memahami `now()` vs `clock_timestamp()`.
+   - Di M10, satu perintah shell gagal karena tanda kutip; tidak ada berkas yang berubah.
+2. **Data contoh butuh beberapa putaran.** Seed simulasi 12 bulan punya beberapa bug (alias bentrok, pembulatan ganda, tidak ada PO "dikirim" di akhir). Resep Bakso awalnya membuat margin **−8%**; itu baru ketahuan saat fitur HPP dibuat di M3.
+3. **Celah uji yang terlambat ditemukan.** Bug `?hal=` melebihi jumlah halaman lolos dari uji M4–M6 dan baru tertangkap di M7. Halaman melebar di ponsel juga baru terlihat saat dashboard dibuat. Pelajarannya: uji tepi (nomor halaman ekstrem, layar sempit) seharusnya masuk daftar uji standar sejak awal.
+4. **Kebiasaan alat browser yang tidak terduga.**
+   - Form tidak bereaksi di tab latar karena hidrasi React ditunda.
+   - Tombol submit pertama di halaman ternyata "Keluar" dan hampir terklik.
+   - Satu screenshot memuat email admin; ditutup sebelum commit.
+
+   Ketiganya kini jadi aturan di `CLAUDE.md`, tetapi masing-masing sempat menghabiskan waktu diagnosis.
+5. **Bergantung pada manusia untuk semua hal yang melibatkan identitas.** Membuat project Supabase, akun admin, menghubungkan Vercel, dan login di produksi harus dilakukan pemilik. Ini disengaja demi keamanan, tetapi berarti agent tidak bisa menyelesaikan proyek sendirian.
+6. **Ingatan percakapan terbatas.** Percakapan yang panjang diringkas otomatis di tengah jalan. Kelanjutan kerja bertumpu pada `CLAUDE.md`, `PROSES.md`, dan memori proyek. Tanpa ketiganya, detail seperti "tab latar menunda hidrasi" akan terlupa dan diulang.
+7. **Keputusan domain tetap butuh manusia.** Agent menebak "bordir" sebagai salah ketik dan bertanya dulu. Asumsi bisnis lain (resep, harga, lead time, musim Lebaran di seed) masuk akal, tetapi tidak divalidasi pelaku UMKM sungguhan.
+
+### Peran pemilik proyek (ringkasan campur tangan)
+
+| Tahap | Campur tangan |
+|---|---|
+| 0 | Menyetujui rencana & stack; mengoreksi studi kasus (frozen food); memutuskan S4 opsional |
+| M1 | Membuat project Supabase, mengisi `.env.local` |
+| M2 | Membuat akun admin, mematikan pendaftaran publik, login di panel browser |
+| M5 | Membuat repo GitHub & push (lebih awal dari rencana); login ulang setelah sesi kedaluwarsa |
+| M5–M9 | Memberi izin push per milestone |
+| M9 | Login Vercel, impor repo, isi 2 env variable, deploy, kirim link, login admin di produksi |
+
+### Yang belum dikerjakan / pengembangan lanjutan
+- **M8b (opsional):** impor ramalan S4. Pintunya sudah ada (`rata_permintaan_harian` otomatis memakai baris `forecast_permintaan` bersumber `s4`). Syarat pakai tetap: MAE ≥10% lebih baik dari rata-rata bergerak.
+- Retur pesanan setelah dikirim, alokasi stok antarpesanan, beberapa supplier per bahan, harga historis per mutasi.
+- Peran pengguna (gudang/produksi/owner) dan project Supabase terpisah untuk pengembangan. Saat ini lokal & produksi memakai database yang sama.
+- Proyek Supabase gratis dijeda setelah 7 hari tidak aktif, jadi buka aplikasi sekali menjelang presentasi.
