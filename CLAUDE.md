@@ -27,6 +27,8 @@ Opsional (M8b): ramalan permintaan dari model S4 milik pemilik proyek, dijalanka
 | Database & Auth | Supabase (Postgres + Supabase Auth), klien `@supabase/ssr` |
 | Hosting | Vercel (aplikasi) + Supabase cloud (DB); kode di GitHub |
 
+**Produksi: https://scm-frozen-food.vercel.app** — Vercel auto-deploy setiap push ke `main`. Env Vercel hanya `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (JANGAN pasang `DATABASE_URL`). Lokal & produksi memakai database Supabase yang SAMA: uji yang mengubah data = mengubah data produksi.
+
 **Penting — Next.js 16 berbeda dari versi lama:** baca dokumentasi di `node_modules/next/dist/docs/` sebelum menulis kode (lihat `AGENTS.md`). Contoh: `middleware.ts` diganti `proxy.ts`. `cacheComponents` sengaja dimatikan di `next.config.ts` (alasan di PROSES.md M0).
 
 ## Struktur folder
@@ -146,5 +148,5 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M6 | Pesanan & pengiriman | selesai |
 | M7 | Dashboard | selesai |
 | M8 | Agen restock (+ M8b S4 opsional) | selesai (M8b belum) |
-| M9 | Deploy GitHub + Vercel | belum |
+| M9 | Deploy GitHub + Vercel | selesai |
 | M10 | Ringkasan akhir | belum |

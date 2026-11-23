@@ -441,3 +441,43 @@ Tidak ada.
 
 ### Campur tangan pemilik
 - Memberi izin push M7 ke GitHub.
+
+## M9 — Deploy ke Vercel (24 Nov 2026)
+
+**Link aplikasi: https://scm-frozen-food.vercel.app**
+
+### Yang dikerjakan
+- **Pemeriksaan sebelum deploy** (oleh agent):
+  - `.env.local` tidak pernah masuk git (`git log --all -- .env.local` kosong).
+  - Pemindaian seluruh riwayat commit untuk pola `sb_secret_`, `sb_publishable_…`, `service_role`, JWT, dan URI Postgres berpassword: tidak ada temuan selain contoh di `.env.example`.
+  - Aplikasi hanya membaca `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+  - Build produksi lulus.
+- **Deploy** (oleh pemilik, karena butuh login akun): Vercel → Import repo GitHub → isi 2 environment variable → Deploy.
+- **Uji di produksi**.
+
+### Keputusan teknis
+1. **Hanya 2 variabel di Vercel.** `DATABASE_URL` (berisi password database) sengaja **tidak** dipasang. Aplikasi tidak memerlukannya karena semua akses lewat Supabase API dengan RLS. Variabel itu hanya untuk skrip migrasi di laptop.
+2. **Publishable key aman di publik** karena database menolak semua akses tanpa login (RLS + GRANT, diuji di M1), dan pendaftaran publik dimatikan.
+3. **Satu database untuk lokal & produksi.** Untuk tugas ini cukup, karena hanya ada satu admin dan data contoh. Di dunia nyata sebaiknya ada project Supabase terpisah untuk pengembangan.
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| Agent tidak bisa login di situs produksi | Aturan keamanan: agent tidak boleh mengetik password akun sungguhan | Pemilik login sendiri di panel browser, lalu agent melanjutkan pengujian |
+| Link deploy tidak ikut terkirim di pesan pertama | Pemilik menekan tombol balasan tanpa menempel URL | Agent meminta URL dan **tidak menebak** `*.vercel.app` (bisa milik orang lain) |
+
+### Hasil tes di produksi
+1. Tanpa login: `/agen-restock` dialihkan ke `/login?next=%2Fagen-restock`, permintaan langsung ke `/mutasi-stok` dialihkan, dan tidak ada error di konsol ✔.
+2. Setelah pemilik login: kembali otomatis ke `/agen-restock` (parameter `next` bekerja) ✔.
+3. Dashboard: angka **sama persis** dengan lokal (10/16 · semua sudah dipesan; PO 9 = 7 draft · 2 dikirim · 2 terlambat) ✔. Tanggal "24 Nov 2026" dan jam mutasi "21.29" tetap **WIB** walau server Vercel memakai UTC ✔.
+4. Mutasi stok (grafik Siomay), agen restock (tidak ada usulan dobel), draft PO-261124-0807 (label agen), pesanan diproses (5, tanda siap kirim): semua tampil ✔.
+5. Ponsel 375 px: lebar dokumen = 375 (tidak ada geser samping) ✔.
+6. **Tombol Keluar** (pertama kali diuji, sengaja ditunda sejak M2): diarahkan ke `/login`, cookie sesi `sb-…` terhapus, `/purchase-order/807` dialihkan, dan tombol *Back* browser berakhir di `/login?next=…`, bukan menampilkan data ✔.
+- Tidak ada data yang diubah selama uji produksi.
+- Screenshot: `m9-produksi-ponsel.jpg`.
+
+### Campur tangan pemilik
+- Login Vercel dengan GitHub, impor repo, mengisi 2 environment variable, menekan Deploy.
+- Mengirim link deploy.
+- Login admin di panel browser untuk pengujian produksi.
+- Memberi izin push M8.
