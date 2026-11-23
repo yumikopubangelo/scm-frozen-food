@@ -271,3 +271,47 @@ Tidak ada.
 
 ### Campur tangan pemilik
 Tidak ada.
+
+---
+
+## M5 — Produksi: bahan berkurang sesuai BOM, produk bertambah (21–23 Nov 2026)
+
+### Yang dikerjakan
+- **Form catat produksi dengan pratinjau langsung**: pilih produk dan jumlah, lalu tabel menunjukkan pemakaian tiap bahan, stok sekarang, dan sisa setelah produksi. Bahan yang kurang ditandai merah, tombol simpan **nonaktif**, dan ada tautan ke pembuatan PO. Tombol "Maks" mengisi kapasitas maksimum. Dropdown produk menampilkan "bisa diproduksi N" untuk tiap produk.
+- **Tanggal produksi** boleh lampau, tapi ditolak server kalau di masa depan.
+- **Riwayat produksi**: ringkasan hasil 30 hari per produk (batang), filter produk, paginasi (±1.630 batch).
+- **Detail batch**: hasil (+qty → stok produk), daftar bahan yang keluar dari gudang beserta stok sesudahnya, perkiraan biaya bahan, nilai jual.
+- Tombol **"Catat produksi"** di halaman produk.
+- Fungsi `kebutuhanProduksi()`, `bagiBulatBawah()`, `bulat2()` + **7 unit test baru** (total 31).
+- `cekGalatMuat()` dipasang di **6 halaman detail**.
+- `docs/produksi.md`.
+
+### Keputusan teknis
+1. **Pratinjau dihitung di browser, keputusan tetap di database.** Pratinjau memakai rumus yang sama dengan fungsi `catat_produksi`, termasuk pembulatan 2 desimal, tapi database tetap menjadi penjaga terakhir yang menolak kalau bahan kurang.
+2. **Biaya batch memakai harga bahan saat ini.** Harga historis tidak disimpan. Ini keterbatasan yang dinyatakan jujur di halaman detail dan di docs. Untuk akuntansi sungguhan, harga per mutasi perlu dicatat.
+3. **Agent menguji di tab browser terpisah.** Pemilik sedang memakai aplikasi di tab yang sama, dan aksi agent sempat "berebut" tab. Mulai titik ini agent membuka tab latar sendiri (sesi login tetap sama).
+
+### Masalah & perbaikan
+| Masalah | Penyebab | Perbaikan |
+|---|---|---|
+| **Bug M3:** kapasitas produksi kadang kurang 1 pak | `Math.floor(0.3 / 0.1)` = 2, karena 0,3/0,1 = 2,9999… di pecahan biner. Pemindaian kombinasi realistis menemukan **526 kasus** | `bagiBulatBawah(a,b) = Math.floor(a/b + 1e-9)` + unit test. Contoh tes awal agent (0,6/0,15) ternyata bukan kasus bermasalah; diganti 0,3/0,1 dan 0,7/0,1 setelah dicek |
+| **Supabase gangguan** (20–21 Nov): halaman detail menampilkan **404** | API gateway Supabase membalas **HTTP 555** setelah 10 detik untuk Auth & REST, padahal Postgres sehat (pooler 0,75 dtk, PostgREST tersambung). Status page Supabase: "All Systems Operational". Halaman mengabaikan error query, jadi data `null` dianggap "tidak ada" | Diagnosis dari header respons (`sb-gateway-version`, `sb-project-ref` → berasal dari gateway Supabase, bukan jaringan lokal). Perbaikan kode: `cekGalatMuat()` membuat gangguan tampil sebagai halaman error. Gangguannya sendiri di luar kendali; per 23 Nov sudah pulih (200, 1,5 dtk) |
+| Agent sempat salah diagnosis | Variabel shell mengambil dua hostname karena `.env.local` memuat contoh URL di baris komentar | Diagnosis diulang dengan Node yang membaca nilai variabel sebenarnya |
+| **Berkas M5 tampak "hilang"** setelah 2 hari | Pemilik membuat repo GitHub, meng-commit kerja M5 yang belum di-commit sebagai "initial commit" di `main`, push, lalu checkout branch `M4` | Agent membaca `git reflog` dan isi commit tersebut (14 berkas M5 utuh), lalu pindah ke `main`. Riwayat yang sudah di-push tidak diubah |
+| **Bug M2:** dua menu tersorot di halaman Produksi | `pathname.startsWith("/produk")` juga cocok untuk `/produksi` | Cocok persis atau `href + "/"` |
+| Sesi login panel kedaluwarsa | Lewat 2 hari + refresh token gagal saat gateway gangguan | Pemilik login ulang |
+| Hampir menekan tombol yang salah | Tombol submit pertama di halaman adalah "Keluar" (sidebar), bukan "Catat produksi" | Agent hanya men-scroll ke sana, lalu memilih tombol berdasarkan label persis. Pelajaran: jangan memilih `button[type=submit]` pertama |
+| Simpan pertama tampak tidak berpindah halaman | Halaman detail di-compile saat pertama dibuka (dev) | Agent **tidak** mengklik ulang (risiko produksi tercatat dua kali), melainkan mengecek database: tercatat tepat 1 kali |
+
+### Hasil tes
+- `tsc`, `lint`, `build`: lulus. **Unit test 31/31. Tes skenario DB 19/19**, dengan buku besar **21.727 = 21.720 + 7 mutasi** dari produksi uji (6 bahan keluar + 1 produk masuk) ✔.
+- **Uji di browser**:
+  1. Produksi **20 pak Cireng**: pratinjau tapioka −5 kg (21,4 → 16,4), ayam −1,2 kg (37,5 → 36,3), plastik −20 (600 → 580), daun bawang −0,2, bawang putih −0,1, bumbu −0,1; stok Cireng 84 → 104. Disimpan sebagai **PRD-261123-1636**, dan halaman detail menunjukkan angka yang sama persis. Biaya Rp 7.560/pak sama dengan biaya BOM di M3 ✔.
+  2. **Dimsum 10 pak** (telur habis): baris Telur merah "kurang 0,1 kg", tombol nonaktif, ada tautan PO ✔.
+  3. **Tanggal besok** dipaksa masuk lewat skrip, lalu server menolak: "Tanggal produksi tidak boleh di masa depan"; jumlah tetap terisi. Database: 0 produksi bertanggal masa depan ✔.
+  4. Riwayat: 1.631 batch / 66 halaman; ringkasan 30 hari tampil; sidebar hanya menyorot "Produksi" setelah perbaikan.
+- Screenshot: `m5-form-pratinjau.jpg`, `m5-bahan-kurang.jpg`, `m5-produksi-daftar.png`, `m5-produksi-detail.png`.
+
+### Campur tangan pemilik
+- Membuat repo GitHub dan push. Ini lebih awal dari rencana M9 dan dilakukan sendiri oleh pemilik.
+- Login ulang di panel browser setelah sesi kedaluwarsa.

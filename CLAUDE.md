@@ -45,6 +45,7 @@ src/
         form-supplier.tsx  # client form (useActionState), dipakai baru & ubah
         actions.ts     #   Server Action simpan (id null = tambah) & hapus
       produk/editor-bom.tsx  # editor resep (BOM) per produk
+      produksi/        # daftar (ringkasan 30 hari + paginasi), baru (pratinjau kebutuhan bahan), [id] (bahan keluar, perkiraan biaya)
       purchase-order/  # daftar (tab status + paginasi), baru (baris dinamis -> JSON), [id] (linimasa, aksi status, edit item saat draft, WA)
   components/
     navigasi.ts        # daftar menu sidebar (satu-satunya sumber)
@@ -63,7 +64,7 @@ src/
     galat-db.ts        # kode error Postgres -> kalimat Indonesia
     format.ts          # rupiah(), angka(), tanggal(), hariIni() WIB, tambahHari(), nomorWa(), kodeBerikutnya()
     cari.ts            # filterCari() aman untuk PostgREST .or()
-    hitung-produk.ts   # biaya bahan per pak, kapasitas produksi dari BOM
+    hitung-produk.ts   # biaya bahan/pak, kapasitas, kebutuhanProduksi; bagiBulatBawah (tahan galat float)
     aksi-stok.ts       # Server Action stok opname
     tipe.ts            # tipe baris tabel
     status.ts          # label/warna/arti status PO & pesanan
@@ -87,6 +88,8 @@ PROSES.md              # jurnal pembangunan per milestone (bahan laporan UAS)
 - **Keamanan:** RLS menyala di semua tabel; hanya pengguna `authenticated` yang boleh baca/tulis. Jangan pernah commit secret — pakai `.env.local` (lokal) dan Environment Variables Vercel (produksi). `DATABASE_URL` hanya untuk skrip lokal.
 - **Format angka/tanggal:** `Intl` dengan locale `id-ID` (Rp, tanggal Indonesia). Input angka menerima koma desimal; `Field` menampilkan angka dengan koma.
 - **Perubahan status dokumen** selalu `supabase.rpc(...)` lalu `redirect(...?ok=<aksi>)` supaya banner sesuai. Form dengan baris dinamis (state React) pakai `onSubmit` + `startTransition`, BUKAN `action=`, agar React 19 tidak mereset form.
+- **Halaman detail** wajib `cekGalatMuat(error...)` sebelum `notFound()` — gangguan Supabase harus tampil sebagai error, bukan 404.
+- **Pembagian stok** (kapasitas, ⌊a/b⌋) pakai `bagiBulatBawah()`, jangan `Math.floor(a/b)` (0,3/0,1 = 2,999…).
 - **Form:** validasi di server dengan zod (`lib/validasi.ts`), kembalikan `StatusForm` (galat per kolom + isian terakhir). Error Supabase selalu lewat `pesanGalat()`. Data yang punya riwayat transaksi tidak bisa dihapus (FK RESTRICT) — itu disengaja.
 - **Setiap milestone:** tes (build + lint + skenario), perbarui `PROSES.md`, lalu commit `M<n>: <ringkasan>`.
 
@@ -111,6 +114,11 @@ npm run db:reset -- --ya     # HAPUS semua objek aplikasi (dev saja)
 
 Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → Add user.
 
+## Git
+
+- Branch kerja: **`main`** (remote `origin` = GitHub `scm-frozen-food`). Branch `M4` = salinan titik M4, jangan dipakai lanjut.
+- Jangan rewrite history yang sudah di-push (tidak ada `--force`). Push hanya bila pemilik meminta.
+
 ## Status milestone
 
 | # | Milestone | Status |
@@ -120,7 +128,7 @@ Akun admin dibuat manual di Supabase Dashboard → Authentication → Users → 
 | M2 | Login + layout | selesai |
 | M3 | Master data + BOM | selesai |
 | M4 | Purchase Order | selesai |
-| M5 | Produksi | belum |
+| M5 | Produksi | selesai |
 | M6 | Pesanan & pengiriman | belum |
 | M7 | Dashboard | belum |
 | M8 | Agen restock (+ M8b S4 opsional) | belum |
